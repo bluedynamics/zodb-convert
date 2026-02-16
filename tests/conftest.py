@@ -1,14 +1,13 @@
-import os
-import shutil
-import tempfile
-
-import pytest
-import transaction
-
-import ZODB
+from ZODB.blob import Blob
 from ZODB.FileStorage import FileStorage
 from ZODB.MappingStorage import MappingStorage
-from ZODB.blob import Blob
+
+import os
+import pytest
+import shutil
+import tempfile
+import transaction
+import ZODB
 
 
 @pytest.fixture

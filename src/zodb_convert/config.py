@@ -1,12 +1,10 @@
 """Configuration handling: ZConfig schema + zope.conf extraction."""
 
-import logging
-import re
-
 from io import StringIO
 
+import logging
+import re
 import ZConfig
-
 import ZODB.config
 
 
@@ -106,7 +104,9 @@ def open_storages(options):
     # Source from zope.conf
     if options.source_zope_conf:
         if source is not None:
-            raise ValueError("Source specified in both config file and --source-zope-conf")
+            raise ValueError(
+                "Source specified in both config file and --source-zope-conf"
+            )
         db = open_storage_from_zope_conf(options.source_zope_conf, options.source_db)
         source = db.storage
         closables.append(db)
@@ -114,14 +114,20 @@ def open_storages(options):
     # Destination from zope.conf
     if options.dest_zope_conf:
         if destination is not None:
-            raise ValueError("Destination specified in both config file and --dest-zope-conf")
+            raise ValueError(
+                "Destination specified in both config file and --dest-zope-conf"
+            )
         db = open_storage_from_zope_conf(options.dest_zope_conf, options.dest_db)
         destination = db.storage
         closables.append(db)
 
     if source is None:
-        raise ValueError("No source storage configured. Use a config file or --source-zope-conf.")
+        raise ValueError(
+            "No source storage configured. Use a config file or --source-zope-conf."
+        )
     if destination is None:
-        raise ValueError("No destination storage configured. Use a config file or --dest-zope-conf.")
+        raise ValueError(
+            "No destination storage configured. Use a config file or --dest-zope-conf."
+        )
 
     return source, destination, closables

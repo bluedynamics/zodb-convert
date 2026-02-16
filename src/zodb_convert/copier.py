@@ -1,10 +1,5 @@
 """Core copy logic for ZODB storage conversion."""
 
-import logging
-import os
-import shutil
-import tempfile
-
 from ZODB.blob import is_blob_record
 from ZODB.interfaces import IBlobStorage
 from ZODB.interfaces import IBlobStorageRestoreable
@@ -12,6 +7,12 @@ from ZODB.interfaces import IStorageIteration
 from ZODB.interfaces import IStorageRestoreable
 from ZODB.utils import p64
 from ZODB.utils import u64
+
+import contextlib
+import logging
+import os
+import shutil
+import tempfile
 
 
 log = logging.getLogger("zodb-convert")
@@ -55,7 +56,9 @@ def get_incremental_start_tid(destination):
     return p64(last_tid + 1)
 
 
-def copy_transactions(source, destination, start_tid=None, dry_run=False, progress=None):
+def copy_transactions(
+    source, destination, start_tid=None, dry_run=False, progress=None
+):
     """Copy transactions from source to destination storage.
 
     Uses IStorageIteration.iterator() on source.
@@ -144,9 +147,7 @@ def copy_transactions(source, destination, start_tid=None, dry_run=False, progre
                         )
                     else:
                         pre = preindex.get(oid)
-                        destination.storeBlob(
-                            oid, pre, data, tmp_path, "", txn_info
-                        )
+                        destination.storeBlob(oid, pre, data, tmp_path, "", txn_info)
                         preindex[oid] = tid
                     txn_blobs += 1
                 elif restoring:
@@ -175,10 +176,8 @@ def copy_transactions(source, destination, start_tid=None, dry_run=False, progre
 
             # Clean up temp blob files
             for tmp in temp_blobs:
-                try:
+                with contextlib.suppress(OSError):
                     os.unlink(tmp)
-                except OSError:
-                    pass
             temp_blobs.clear()
 
             if progress:
@@ -189,9 +188,7 @@ def copy_transactions(source, destination, start_tid=None, dry_run=False, progre
             fiter.close()
         # Clean any remaining temp blobs
         for tmp in temp_blobs:
-            try:
+            with contextlib.suppress(OSError):
                 os.unlink(tmp)
-            except OSError:
-                pass
 
     return txn_count, obj_count, blob_count

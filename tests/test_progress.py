@@ -1,10 +1,9 @@
-import logging
-
 from ZODB.utils import p64
-
-from zodb_convert.progress import ProgressReporter
 from zodb_convert.progress import _format_bytes
 from zodb_convert.progress import _format_duration
+from zodb_convert.progress import ProgressReporter
+
+import logging
 
 
 class TestFormatHelpers:
@@ -51,7 +50,9 @@ class TestProgressReporter:
         p = ProgressReporter(total_txns=1000, verbose=True)
         with caplog.at_level(logging.INFO, logger="zodb-convert"):
             for i in range(5):
-                p.on_transaction(p64(i + 1), record_count=1, byte_size=100, blob_count=0)
+                p.on_transaction(
+                    p64(i + 1), record_count=1, byte_size=100, blob_count=0
+                )
         # In verbose mode, every transaction should be logged
         assert len(caplog.records) == 5
 
@@ -59,7 +60,9 @@ class TestProgressReporter:
         p = ProgressReporter(total_txns=10)
         with caplog.at_level(logging.INFO, logger="zodb-convert"):
             for i in range(5):
-                p.on_transaction(p64(i + 1), record_count=1, byte_size=100, blob_count=0)
+                p.on_transaction(
+                    p64(i + 1), record_count=1, byte_size=100, blob_count=0
+                )
         # Small conversion (< 100 total), per-transaction logging
         assert len(caplog.records) == 5
 
@@ -67,7 +70,9 @@ class TestProgressReporter:
         p = ProgressReporter(total_txns=1000, log_interval=0.001, log_count=3)
         with caplog.at_level(logging.INFO, logger="zodb-convert"):
             for i in range(10):
-                p.on_transaction(p64(i + 1), record_count=1, byte_size=100, blob_count=0)
+                p.on_transaction(
+                    p64(i + 1), record_count=1, byte_size=100, blob_count=0
+                )
         # First transaction always logged, then interval-based
         assert len(caplog.records) >= 2
 
@@ -86,6 +91,8 @@ class TestProgressReporter:
         p = ProgressReporter(total_txns=None, verbose=False, log_count=5)
         with caplog.at_level(logging.INFO, logger="zodb-convert"):
             for i in range(3):
-                p.on_transaction(p64(i + 1), record_count=1, byte_size=100, blob_count=0)
+                p.on_transaction(
+                    p64(i + 1), record_count=1, byte_size=100, blob_count=0
+                )
         # First transaction always logged
         assert len(caplog.records) >= 1

@@ -1,11 +1,10 @@
-import os
 from types import SimpleNamespace
-
-import pytest
-
 from zodb_convert.config import open_storage_from_zope_conf
 from zodb_convert.config import open_storages
 from zodb_convert.config import open_storages_from_config
+
+import os
+import pytest
 
 
 class TestTraditionalConfig:

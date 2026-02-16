@@ -1,11 +1,10 @@
 """Tests for CLI entry point."""
 
-import os
-
-import pytest
-
 from zodb_convert.cli import main
 from zodb_convert.cli import parse_args
+
+import os
+import pytest
 
 
 class TestParseArgs:
@@ -26,28 +25,41 @@ class TestParseArgs:
         assert args.dest_db == "main"
 
     def test_both_zope_conf(self):
-        args = parse_args([
-            "--source-zope-conf", "old.conf",
-            "--dest-zope-conf", "new.conf",
-        ])
+        args = parse_args(
+            [
+                "--source-zope-conf",
+                "old.conf",
+                "--dest-zope-conf",
+                "new.conf",
+            ]
+        )
         assert args.source_zope_conf == "old.conf"
         assert args.dest_zope_conf == "new.conf"
 
     def test_mixed_mode(self):
-        args = parse_args([
-            "convert.conf",
-            "--source-zope-conf", "old.conf",
-        ])
+        args = parse_args(
+            [
+                "convert.conf",
+                "--source-zope-conf",
+                "old.conf",
+            ]
+        )
         assert args.config_file == "convert.conf"
         assert args.source_zope_conf == "old.conf"
 
     def test_custom_db_names(self):
-        args = parse_args([
-            "--source-zope-conf", "old.conf",
-            "--source-db", "catalog",
-            "--dest-zope-conf", "new.conf",
-            "--dest-db", "catalog",
-        ])
+        args = parse_args(
+            [
+                "--source-zope-conf",
+                "old.conf",
+                "--source-db",
+                "catalog",
+                "--dest-zope-conf",
+                "new.conf",
+                "--dest-db",
+                "catalog",
+            ]
+        )
         assert args.source_db == "catalog"
         assert args.dest_db == "catalog"
 
@@ -134,7 +146,6 @@ def _write_config(temp_dir, src_path, dst_path, src_blob_dir=None, dst_blob_dir=
 def _create_source(src_path, data, note=None):
     """Create a FileStorage with data and return it closed."""
     import transaction
-
     import ZODB
     import ZODB.FileStorage
 
@@ -188,7 +199,6 @@ class TestMainEndToEnd:
     def test_incremental_copy(self, temp_dir):
         """Incremental copy should only copy new transactions."""
         import transaction
-
         import ZODB
         import ZODB.FileStorage
 

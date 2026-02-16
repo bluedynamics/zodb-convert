@@ -1,9 +1,9 @@
 """Progress reporting for ZODB storage conversion."""
 
+from ZODB.utils import readable_tid_repr
+
 import logging
 import time
-
-from ZODB.utils import readable_tid_repr
 
 
 log = logging.getLogger("zodb-convert")
@@ -61,9 +61,7 @@ class ProgressReporter:
         """Whether to log every transaction."""
         if self.verbose:
             return True
-        if self.total_txns is not None and self.total_txns < 100:
-            return True
-        return False
+        return self.total_txns is not None and self.total_txns < 100
 
     def on_transaction(self, tid, record_count, byte_size, blob_count):
         """Called after each transaction is copied."""
@@ -75,9 +73,7 @@ class ProgressReporter:
         now = time.monotonic()
         is_first = self.txn_count == 1
 
-        if self._per_transaction:
-            self._log_transaction(tid, record_count, blob_count, byte_size)
-        elif is_first:
+        if self._per_transaction or is_first:
             self._log_transaction(tid, record_count, blob_count, byte_size)
         elif self._should_interval_log(now):
             self._log_interval(now)
@@ -87,7 +83,9 @@ class ProgressReporter:
     def _should_interval_log(self, now):
         elapsed_since_log = now - self.last_log_time
         txns_since_log = self.txn_count - self.last_log_txn_count
-        return elapsed_since_log >= self.log_interval or txns_since_log >= self.log_count
+        return (
+            elapsed_since_log >= self.log_interval or txns_since_log >= self.log_count
+        )
 
     def _log_transaction(self, tid, record_count, blob_count, byte_size):
         pct = ""

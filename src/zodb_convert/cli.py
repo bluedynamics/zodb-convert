@@ -1,13 +1,14 @@
 """CLI entry point for zodb-convert."""
 
-import argparse
-import logging
-import sys
-
 from zodb_convert.config import open_storages
 from zodb_convert.copier import copy_transactions
 from zodb_convert.copier import get_incremental_start_tid
 from zodb_convert.progress import ProgressReporter
+
+import argparse
+import contextlib
+import logging
+import sys
 
 
 log = logging.getLogger("zodb-convert")
@@ -76,7 +77,9 @@ def parse_args(argv):
 
     # Require at least one source/destination specification
     if not args.config_file and not args.source_zope_conf and not args.dest_zope_conf:
-        parser.error("At least one of config_file, --source-zope-conf, or --dest-zope-conf is required.")
+        parser.error(
+            "At least one of config_file, --source-zope-conf, or --dest-zope-conf is required."
+        )
 
     return args
 
@@ -121,9 +124,7 @@ def main(argv=None):
         total_txns = None
         try:
             it = source.iterator(start=start_tid)
-            total_txns = 0
-            for _txn in it:
-                total_txns += 1
+            total_txns = sum(1 for _ in it)
             if hasattr(it, "close"):
                 it.close()
         except Exception:
@@ -152,14 +153,12 @@ def main(argv=None):
         return 0
 
     except (ValueError, FileNotFoundError) as e:
-        print(f"Error: {e}", file=sys.stderr)
+        log.error("%s", e)
         sys.exit(1)
     except Exception as e:
         log.error("Conversion failed: %s", e, exc_info=True)
         sys.exit(2)
     finally:
         for obj in closables:
-            try:
+            with contextlib.suppress(Exception):
                 obj.close()
-            except Exception:
-                pass

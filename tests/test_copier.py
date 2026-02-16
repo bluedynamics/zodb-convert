@@ -1,13 +1,12 @@
-import transaction
-
-import ZODB
-from ZODB.MappingStorage import MappingStorage
 from ZODB.utils import u64
-
 from zodb_convert.copier import copy_transactions
 from zodb_convert.copier import detect_capabilities
 from zodb_convert.copier import get_incremental_start_tid
 from zodb_convert.copier import storage_has_data
+
+import transaction
+import ZODB
+import ZODB.FileStorage
 
 
 class TestStorageHasData:
@@ -74,7 +73,7 @@ class TestCopyTransactions:
         db2.close()
 
     def test_copy_multiple_transactions(self, populated_source, dest_filestorage):
-        txn_count, obj_count, blob_count = copy_transactions(
+        txn_count, obj_count, _blob_count = copy_transactions(
             populated_source, dest_filestorage
         )
         # 4 txns: initial root + 3 explicit commits from populated_source
@@ -112,7 +111,7 @@ class TestCopyTransactions:
 
 class TestCopyBlobs:
     def test_copy_with_blobs(self, populated_source, dest_filestorage):
-        txn_count, obj_count, blob_count = copy_transactions(
+        _txn_count, _obj_count, blob_count = copy_transactions(
             populated_source, dest_filestorage
         )
         assert blob_count >= 1
@@ -127,7 +126,9 @@ class TestCopyBlobs:
         conn.close()
         db.close()
 
-    def test_copy_no_blobs_to_non_blob_dest(self, source_filestorage, dest_mapping_storage):
+    def test_copy_no_blobs_to_non_blob_dest(
+        self, source_filestorage, dest_mapping_storage
+    ):
         """When dest doesn't support blobs, blob records are still copied (data only)."""
         # Use source with only simple data (no blobs) to avoid store() conflict issues
         db = ZODB.DB(source_filestorage)
@@ -138,7 +139,7 @@ class TestCopyBlobs:
         conn.close()
         db.close()
 
-        txn_count, obj_count, blob_count = copy_transactions(
+        txn_count, _obj_count, blob_count = copy_transactions(
             source_filestorage, dest_mapping_storage
         )
         assert txn_count >= 1
@@ -157,7 +158,7 @@ class TestCopyFallback:
         conn.close()
         db.close()
 
-        txn_count, obj_count, blob_count = copy_transactions(
+        txn_count, obj_count, _blob_count = copy_transactions(
             source_mapping_storage, dest_mapping_storage
         )
         assert txn_count >= 1
@@ -174,7 +175,7 @@ class TestCopyFallback:
 
 class TestDryRun:
     def test_dry_run_no_writes(self, populated_source, dest_filestorage):
-        txn_count, obj_count, blob_count = copy_transactions(
+        txn_count, obj_count, _blob_count = copy_transactions(
             populated_source, dest_filestorage, dry_run=True
         )
         # 4 txns: initial root + 3 explicit
@@ -238,7 +239,7 @@ class TestIncremental:
         source = ZODB.FileStorage.FileStorage(src_path, blob_dir=src_blobs)
         dest = ZODB.FileStorage.FileStorage(dst_path, blob_dir=dst_blobs)
         start_tid = get_incremental_start_tid(dest)
-        txn_count, obj_count, blob_count = copy_transactions(
+        txn_count, _obj_count, _blob_count = copy_transactions(
             source, dest, start_tid=start_tid
         )
         assert txn_count == 1  # Only the new transaction
