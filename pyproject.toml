@@ -1,0 +1,106 @@
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[project]
+name = "zodb-convert"
+dynamic = ["version"]
+description = "Generic ZODB storage conversion tool"
+readme = "README.md"
+license = "ZPL-2.1"
+requires-python = ">=3.12"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Zope Public License",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Database",
+    "Framework :: ZODB",
+]
+dependencies = [
+    "ZODB>=5.8",
+    "ZConfig",
+    "zope.interface",
+    "transaction",
+]
+
+[project.urls]
+Homepage = "https://github.com/bluedynamics/zodb-convert"
+Repository = "https://github.com/bluedynamics/zodb-convert"
+Issues = "https://github.com/bluedynamics/zodb-convert/issues"
+
+[project.scripts]
+zodb-convert = "zodb_convert.cli:main"
+
+[project.optional-dependencies]
+test = [
+    "pytest",
+    "pytest-cov",
+    "coverage[toml]>=7.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/zodb_convert"]
+
+[tool.hatch.version]
+source = "vcs"
+root = "../.."
+raw-options = { local_scheme = "no-local-version" }
+fallback-version = "0.0.0.dev0"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+parallel = true
+source = ["zodb_convert"]
+relative_files = true
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 90
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+]
+
+[tool.ruff]
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+    "A",
+    "B",
+    "C4",
+    "E",
+    "F",
+    "I",
+    "RUF",
+    "SIM",
+    "T20",
+    "UP",
+    "W",
+]
+ignore = [
+    "E501",
+    "RUF001",
+    "RUF002",
+]
+
+[tool.ruff.lint.isort]
+force-single-line = true
+from-first = true
+lines-after-imports = 2
+lines-between-types = 1
+no-sections = true
+order-by-type = false
+
+[tool.ruff.lint.pycodestyle]
+max-line-length = 120
+max-doc-length = 120
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["T201"]
