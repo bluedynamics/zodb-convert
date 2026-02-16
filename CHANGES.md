@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.0.0a1 (unreleased)
+## 1.0.0b1
 
 Initial release. Derived from
 [RelStorage's zodbconvert](https://github.com/zodb/relstorage)
