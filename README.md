@@ -25,19 +25,47 @@ pip install zodb-convert ZODB zodb-pgjsonb  # FileStorage ↔ PGJsonb
 Create a config file (`convert.conf`):
 
 ```
-<source>
+<filestorage source>
+    path /data/Data.fs
+    blob-dir /data/blobs
+</filestorage>
+
+<filestorage destination>
+    path /backup/Data.fs
+    blob-dir /backup/blobs
+</filestorage>
+```
+
+For storages that need blob wrapping:
+
+```
+<blobstorage source>
+    blob-dir /data/blobs
     <filestorage>
         path /data/Data.fs
-        blob-dir /data/blobs
     </filestorage>
-</source>
+</blobstorage>
 
-<destination>
-    <filestorage>
-        path /backup/Data.fs
-        blob-dir /backup/blobs
-    </filestorage>
-</destination>
+<filestorage destination>
+    path /backup/Data.fs
+    blob-dir /backup/blobs
+</filestorage>
+```
+
+For third-party storages, use `%import`:
+
+```
+%import relstorage
+
+<relstorage source>
+    <postgresql>
+        dsn dbname=zodb user=zodb
+    </postgresql>
+</relstorage>
+
+<filestorage destination>
+    path /backup/Data.fs
+</filestorage>
 ```
 
 Run:
@@ -69,7 +97,7 @@ Combine traditional config with zope.conf extraction:
 zodb-convert convert.conf --source-zope-conf /old/etc/zope.conf
 ```
 
-Where `convert.conf` contains only the `<destination>` section.
+Where `convert.conf` contains only the destination storage section.
 
 ### Options
 
