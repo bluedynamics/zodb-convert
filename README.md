@@ -105,6 +105,19 @@ Where `convert.conf` contains only the destination storage section.
 - `--incremental` — resume from the last transaction in the destination
 - `-v` / `--verbose` — increase verbosity (`-v` for INFO, `-vv` for DEBUG)
 
+## Source Code and Contributions
+
+The source code is managed in a Git repository, with its main branches hosted on GitHub.
+Issues can be reported there too.
+
+We'd be happy to see many forks and pull requests to make this package even better.
+We welcome AI-assisted contributions, but expect every contributor to fully understand and be able to explain the code they submit.
+Please don't send bulk auto-generated pull requests.
+
+Maintainers are Jens Klein and the BlueDynamics Alliance developer team.
+We appreciate any contribution and if a release on PyPI is needed, please just contact one of us.
+We also offer commercial support if any training, coaching, integration or adaptations are needed.
+
 ## License
 
 ZPL-2.1 — see [LICENSE.txt](LICENSE.txt)
