@@ -30,6 +30,7 @@ dependencies = [
 [project.urls]
 Homepage = "https://github.com/bluedynamics/zodb-convert"
 Repository = "https://github.com/bluedynamics/zodb-convert"
+Changelog = "https://github.com/bluedynamics/zodb-convert/blob/main/CHANGES.md"
 Issues = "https://github.com/bluedynamics/zodb-convert/issues"
 
 [project.scripts]
