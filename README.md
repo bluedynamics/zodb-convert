@@ -120,4 +120,4 @@ We also offer commercial support if any training, coaching, integration or adapt
 
 ## License
 
-ZPL-2.1 — see [LICENSE.txt](LICENSE.txt)
+ZPL-2.1 — see [LICENSE.txt](https://github.com/bluedynamics/zodb-convert/blob/main/LICENSE.txt)
