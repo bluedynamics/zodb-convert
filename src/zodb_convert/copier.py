@@ -108,6 +108,7 @@ def copy_transactions(
 
             txn_byte_size = 0
             txn_blobs = 0
+            txn_records = 0
 
             for record in txn_info:
                 oid = record.oid
@@ -162,6 +163,7 @@ def copy_transactions(
                 if data:
                     txn_byte_size += len(data)
                 obj_count += 1
+                txn_records += 1
 
             destination.tpc_vote(txn_info)
             committed_tid = destination.tpc_finish(txn_info)
@@ -181,7 +183,7 @@ def copy_transactions(
             temp_blobs.clear()
 
             if progress:
-                progress.on_transaction(tid, obj_count, txn_byte_size, txn_blobs)
+                progress.on_transaction(tid, txn_records, txn_byte_size, txn_blobs)
 
     finally:
         if hasattr(fiter, "close"):

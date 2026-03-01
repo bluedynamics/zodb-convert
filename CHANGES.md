@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.0b2
+
+- Fix progress reporting: per-transaction record count was cumulative instead of per-transaction.
+
 ## 1.0.0b1
 
 Initial release. Derived from
