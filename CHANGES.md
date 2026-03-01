@@ -2,9 +2,9 @@
 
 ## 1.0.0b3
 
-- Fix `--incremental` resume failing after interrupted conversion: open storages
-  directly via `storageFromString` instead of `ZODB.DB`, which avoids creating a
-  root object with a wall-clock TID that overshadows source TIDs.
+- Fix `--incremental` resume when destination has wall-clock TIDs from ZODB.DB
+  initialization that overshoot the source TID range. The incremental logic now
+  compares source/destination TID ranges and scans for the real resume point.
 
 ## 1.0.0b2
 

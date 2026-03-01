@@ -1,5 +1,4 @@
 from types import SimpleNamespace
-from zodb_convert.config import _extract_inner_storage
 from zodb_convert.config import open_storage_from_zope_conf
 from zodb_convert.config import open_storages
 from zodb_convert.config import open_storages_from_config
@@ -89,11 +88,12 @@ class TestZopeConfExtraction:
         with open(conf_path, "w") as f:
             f.write(zope_conf)
 
-        storage = open_storage_from_zope_conf(conf_path, db_name="main")
+        db = open_storage_from_zope_conf(conf_path, db_name="main")
         try:
-            assert storage is not None
+            assert db is not None
+            assert db.storage is not None
         finally:
-            storage.close()
+            db.close()
 
     def test_with_import_directives(self, temp_dir):
         """Verify %import lines are preserved."""
@@ -110,11 +110,11 @@ class TestZopeConfExtraction:
         with open(conf_path, "w") as f:
             f.write(zope_conf)
 
-        storage = open_storage_from_zope_conf(conf_path, db_name="main")
+        db = open_storage_from_zope_conf(conf_path, db_name="main")
         try:
-            assert storage is not None
+            assert db.storage is not None
         finally:
-            storage.close()
+            db.close()
 
     def test_named_db_selection(self, temp_dir):
         fs_path1 = os.path.join(temp_dir, "main.fs")
@@ -138,12 +138,13 @@ class TestZopeConfExtraction:
         with open(conf_path, "w") as f:
             f.write(zope_conf)
 
-        storage = open_storage_from_zope_conf(conf_path, db_name="catalog")
+        db = open_storage_from_zope_conf(conf_path, db_name="catalog")
         try:
-            assert storage is not None
-            assert storage.getName().endswith("catalog.fs")
+            assert db.storage is not None
+            # Verify it opened the catalog storage by checking the file path
+            assert db.storage.getName().endswith("catalog.fs")
         finally:
-            storage.close()
+            db.close()
 
     def test_db_name_not_found(self, temp_dir):
         zope_conf = """\
@@ -175,11 +176,11 @@ class TestZopeConfExtraction:
             f.write(zope_conf)
 
         # Should not raise (mount-point is not a valid ZODB config key)
-        storage = open_storage_from_zope_conf(conf_path, db_name="main")
+        db = open_storage_from_zope_conf(conf_path, db_name="main")
         try:
-            assert storage is not None
+            assert db.storage is not None
         finally:
-            storage.close()
+            db.close()
 
     def test_with_other_sections(self, temp_dir):
         """Non-ZODB sections in zope.conf should be ignored."""
@@ -196,47 +197,11 @@ class TestZopeConfExtraction:
         with open(conf_path, "w") as f:
             f.write(zope_conf)
 
-        storage = open_storage_from_zope_conf(conf_path, db_name="main")
+        db = open_storage_from_zope_conf(conf_path, db_name="main")
         try:
-            assert storage is not None
+            assert db.storage is not None
         finally:
-            storage.close()
-
-
-class TestExtractInnerStorage:
-    def test_simple_section(self):
-        section = """\
-<zodb_db main>
-    <filestorage>
-        path /tmp/Data.fs
-    </filestorage>
-</zodb_db>"""
-        result = _extract_inner_storage(section)
-        assert result is not None
-        assert result.startswith("<filestorage>")
-        assert result.endswith("</filestorage>")
-
-    def test_nested_wrapper(self):
-        """Nested wrappers like <z3blobs><pgjsonb>...</pgjsonb></z3blobs>."""
-        section = """\
-<zodb_db main>
-    <z3blobs>
-        blob-dir /tmp/blobs
-        <pgjsonb>
-            dsn host=localhost
-        </pgjsonb>
-    </z3blobs>
-</zodb_db>"""
-        result = _extract_inner_storage(section)
-        assert result is not None
-        assert result.startswith("<z3blobs>")
-        assert result.endswith("</z3blobs>")
-        assert "<pgjsonb>" in result
-
-    def test_no_inner_section(self):
-        section = "<zodb_db main>\n    cache-size 5000\n</zodb_db>"
-        result = _extract_inner_storage(section)
-        assert result is None
+            db.close()
 
 
 class TestOpenStorages:

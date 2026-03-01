@@ -43,17 +43,42 @@ def detect_capabilities(source, destination):
     }
 
 
-def get_incremental_start_tid(destination):
+def get_incremental_start_tid(source, destination):
     """Get the TID to resume from for incremental copy.
 
-    Returns None if destination is empty.
+    Returns None if destination is empty (full copy needed).
+
+    When the destination contains TIDs beyond the source range (e.g. from
+    ZODB.DB root object creation with wall-clock timestamps), scans the
+    destination to find the actual last restored source TID.
     """
     if not storage_has_data(destination):
         return None
-    last_tid = destination.lastTransaction()
-    if isinstance(last_tid, bytes):
-        last_tid = u64(last_tid)
-    return p64(last_tid + 1)
+
+    dest_last = destination.lastTransaction()
+    source_last = source.lastTransaction()
+    dest_last_int = u64(dest_last) if isinstance(dest_last, bytes) else dest_last
+    source_last_int = (
+        u64(source_last) if isinstance(source_last, bytes) else source_last
+    )
+
+    if dest_last_int <= source_last_int:
+        # Normal case: destination TIDs are within source range
+        return p64(dest_last_int + 1)
+
+    # Destination has TIDs beyond source (e.g. from ZODB.DB initialization).
+    # Scan destination to find the highest TID within the source range.
+    log.info("Destination has TIDs beyond source range, scanning for resume point...")
+    last_valid_int = None
+    for txn in destination.iterator():
+        tid_int = u64(txn.tid)
+        if tid_int <= source_last_int:
+            last_valid_int = tid_int
+
+    if last_valid_int is None:
+        return None  # No source TIDs in destination, full copy
+
+    return p64(last_valid_int + 1)
 
 
 def copy_transactions(

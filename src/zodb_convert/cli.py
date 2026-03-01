@@ -111,7 +111,7 @@ def main(argv=None):
 
         start_tid = None
         if args.incremental:
-            start_tid = get_incremental_start_tid(destination)
+            start_tid = get_incremental_start_tid(source, destination)
             if start_tid is not None:
                 log.info("Incremental mode: resuming from TID %r", start_tid)
             else:

@@ -42,16 +42,25 @@ def open_storages_from_config(config_path):
     return source, destination
 
 
-def _extract_zodb_db_section(path, db_name):
-    """Extract the <zodb_db db_name> section from a zope.conf file.
+def open_storage_from_zope_conf(path, db_name="main"):
+    """Extract storage configuration from a zope.conf file and return a ZODB.DB.
 
-    Returns (directives_list, section_text).
+    Parses the zope.conf to find the <zodb_db db_name> section,
+    converts it to a standalone <zodb> section, and opens via
+    ZODB.config.databaseFromString().
+
+    Uses databaseFromString (not storageFromString) because the storage-only
+    ZConfig schema doesn't resolve custom types from %import directives.
+
+    Returns a ZODB.DB object. Caller uses db.storage and must call db.close().
     """
     with open(path) as f:
         content = f.read()
 
+    # Extract %import and %define directives
     directives = re.findall(r"^(%(?:import|define)\s+.*)$", content, re.MULTILINE)
 
+    # Extract <zodb_db db_name>...</zodb_db> section
     pattern = r"(<zodb_db\s+" + re.escape(db_name) + r"\s*>.*?</zodb_db>)"
     match = re.search(pattern, content, re.DOTALL)
     if not match:
@@ -59,57 +68,17 @@ def _extract_zodb_db_section(path, db_name):
 
     section = match.group(1)
 
+    # Convert <zodb_db NAME> to <zodb NAME> format
+    section = re.sub(r"<zodb_db\s+\S+\s*>", f"<zodb {db_name}>", section)
+    section = section.replace("</zodb_db>", "</zodb>")
+
     # Remove Zope-specific keys
     for key in _ZOPE_SPECIFIC_KEYS:
         section = re.sub(rf"^\s*{key}\s+.*$", "", section, flags=re.MULTILINE)
 
-    return directives, section
-
-
-def _extract_inner_storage(section):
-    """Extract the outermost storage section from a <zodb_db> block.
-
-    Finds the first non-wrapper opening tag and its matching closing tag,
-    correctly handling nested sections like <z3blobs><pgjsonb>...</pgjsonb></z3blobs>.
-    """
-    # Find the first opening tag that isn't the zodb_db/zodb wrapper
-    start_match = re.search(r"<(?!zodb_db\b|zodb\b|/)(\w[\w-]*)", section)
-    if not start_match:
-        return None
-    tag_name = start_match.group(1)
-    start_pos = start_match.start()
-    # Find the last matching closing tag (inner nested ones close first)
-    close_pattern = rf"</{re.escape(tag_name)}\s*>"
-    close_matches = list(re.finditer(close_pattern, section))
-    if not close_matches:
-        return None
-    end_pos = close_matches[-1].end()
-    return section[start_pos:end_pos]
-
-
-def open_storage_from_zope_conf(path, db_name="main"):
-    """Extract storage from a zope.conf file and open it directly.
-
-    Opens the storage without wrapping in ZODB.DB, avoiding automatic
-    root object creation which would pollute TIDs for conversion.
-
-    Returns the storage object. Caller must call storage.close().
-    """
-    directives, section = _extract_zodb_db_section(path, db_name)
-
-    inner = _extract_inner_storage(section)
-    if inner:
-        config_str = "\n".join(directives) + "\n" + inner
-        return ZODB.config.storageFromString(config_str)
-
-    # Fallback: wrap in <zodb> and open via DB (shouldn't normally happen)
-    section = re.sub(r"<zodb_db\s+\S+\s*>", f"<zodb {db_name}>", section)
-    section = section.replace("</zodb_db>", "</zodb>")
     config_str = "\n".join(directives) + "\n" + section
     db = ZODB.config.databaseFromString(config_str)
-    storage = db.storage
-    db.close()
-    return storage
+    return db
 
 
 def open_storages(options):
@@ -141,10 +110,9 @@ def open_storages(options):
             raise ValueError(
                 "Source specified in both config file and --source-zope-conf"
             )
-        source = open_storage_from_zope_conf(
-            options.source_zope_conf, options.source_db
-        )
-        closables.append(source)
+        db = open_storage_from_zope_conf(options.source_zope_conf, options.source_db)
+        source = db.storage
+        closables.append(db)
 
     # Destination from zope.conf
     if options.dest_zope_conf:
@@ -152,10 +120,9 @@ def open_storages(options):
             raise ValueError(
                 "Destination specified in both config file and --dest-zope-conf"
             )
-        destination = open_storage_from_zope_conf(
-            options.dest_zope_conf, options.dest_db
-        )
-        closables.append(destination)
+        db = open_storage_from_zope_conf(options.dest_zope_conf, options.dest_db)
+        destination = db.storage
+        closables.append(db)
 
     if source is None:
         raise ValueError(

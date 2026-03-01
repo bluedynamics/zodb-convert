@@ -187,14 +187,18 @@ class TestDryRun:
 
 
 class TestIncremental:
-    def test_get_incremental_start_tid_empty(self, dest_filestorage):
-        result = get_incremental_start_tid(dest_filestorage)
+    def test_get_incremental_start_tid_empty(self, populated_source, dest_filestorage):
+        result = get_incremental_start_tid(populated_source, dest_filestorage)
         assert result is None
 
-    def test_get_incremental_start_tid_with_data(self, populated_source):
-        tid = get_incremental_start_tid(populated_source)
+    def test_get_incremental_start_tid_with_data(
+        self, populated_source, dest_filestorage
+    ):
+        # Copy data first so destination has transactions
+        copy_transactions(populated_source, dest_filestorage)
+        tid = get_incremental_start_tid(populated_source, dest_filestorage)
         assert tid is not None
-        last = populated_source.lastTransaction()
+        last = dest_filestorage.lastTransaction()
         assert u64(tid) == u64(last) + 1
 
     def test_incremental_copy(self, temp_dir):
@@ -238,7 +242,7 @@ class TestIncremental:
         # Incremental copy
         source = ZODB.FileStorage.FileStorage(src_path, blob_dir=src_blobs)
         dest = ZODB.FileStorage.FileStorage(dst_path, blob_dir=dst_blobs)
-        start_tid = get_incremental_start_tid(dest)
+        start_tid = get_incremental_start_tid(source, dest)
         txn_count, _obj_count, _blob_count = copy_transactions(
             source, dest, start_tid=start_tid
         )
@@ -253,3 +257,55 @@ class TestIncremental:
         assert root2["key3"] == "value3"
         conn2.close()
         db2.close()
+
+    def test_incremental_with_wallclock_tid(self, temp_dir):
+        """Destination has a wall-clock TID beyond source range (from ZODB.DB init).
+
+        get_incremental_start_tid should scan for the real resume point.
+        """
+        from ZODB.TimeStamp import TimeStamp
+
+        import os
+
+        src_path = os.path.join(temp_dir, "wc_source.fs")
+        src_blobs = os.path.join(temp_dir, "wc_source_blobs")
+        dst_path = os.path.join(temp_dir, "wc_dest.fs")
+        dst_blobs = os.path.join(temp_dir, "wc_dest_blobs")
+
+        # Create source with data
+        source = ZODB.FileStorage.FileStorage(src_path, blob_dir=src_blobs)
+        db = ZODB.DB(source)
+        conn = db.open()
+        root = conn.root()
+        root["key1"] = "value1"
+        transaction.commit()
+        root["key2"] = "value2"
+        transaction.commit()
+        conn.close()
+        db.close()
+
+        # Copy to destination (preserves source TIDs via restore)
+        source = ZODB.FileStorage.FileStorage(src_path, blob_dir=src_blobs)
+        dest = ZODB.FileStorage.FileStorage(dst_path, blob_dir=dst_blobs)
+        copy_transactions(source, dest)
+
+        # Remember the last real (restored) TID
+        real_last_tid = u64(dest.lastTransaction())
+
+        # Simulate ZODB.DB init pollution: set _ltid to a far-future value.
+        # This is what happens when ZODB.DB creates a root object with a
+        # wall-clock TID that's beyond the source data's TID range.
+        future_ts = TimeStamp(2099, 1, 1, 0, 0, 0)
+        dest._ltid = future_ts.raw()
+
+        # Now dest.lastTransaction() returns the far-future TID
+        assert u64(dest.lastTransaction()) > u64(source.lastTransaction())
+
+        # get_incremental_start_tid should detect the mismatch and scan
+        start_tid = get_incremental_start_tid(source, dest)
+        # Should resume from after the last real source TID, not the future
+        assert start_tid is not None
+        assert u64(start_tid) == real_last_tid + 1
+
+        source.close()
+        dest.close()
