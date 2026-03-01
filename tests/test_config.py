@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+from zodb_convert.config import _extract_inner_storage
 from zodb_convert.config import open_storage_from_zope_conf
 from zodb_convert.config import open_storages
 from zodb_convert.config import open_storages_from_config
@@ -200,6 +201,42 @@ class TestZopeConfExtraction:
             assert storage is not None
         finally:
             storage.close()
+
+
+class TestExtractInnerStorage:
+    def test_simple_section(self):
+        section = """\
+<zodb_db main>
+    <filestorage>
+        path /tmp/Data.fs
+    </filestorage>
+</zodb_db>"""
+        result = _extract_inner_storage(section)
+        assert result is not None
+        assert result.startswith("<filestorage>")
+        assert result.endswith("</filestorage>")
+
+    def test_nested_wrapper(self):
+        """Nested wrappers like <z3blobs><pgjsonb>...</pgjsonb></z3blobs>."""
+        section = """\
+<zodb_db main>
+    <z3blobs>
+        blob-dir /tmp/blobs
+        <pgjsonb>
+            dsn host=localhost
+        </pgjsonb>
+    </z3blobs>
+</zodb_db>"""
+        result = _extract_inner_storage(section)
+        assert result is not None
+        assert result.startswith("<z3blobs>")
+        assert result.endswith("</z3blobs>")
+        assert "<pgjsonb>" in result
+
+    def test_no_inner_section(self):
+        section = "<zodb_db main>\n    cache-size 5000\n</zodb_db>"
+        result = _extract_inner_storage(section)
+        assert result is None
 
 
 class TestOpenStorages:

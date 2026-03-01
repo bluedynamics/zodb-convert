@@ -67,19 +67,24 @@ def _extract_zodb_db_section(path, db_name):
 
 
 def _extract_inner_storage(section):
-    """Extract the inner storage section from a <zodb_db> block.
+    """Extract the outermost storage section from a <zodb_db> block.
 
-    Looks for the first nested <tag>...</tag> section, skipping
-    the outer <zodb_db> wrapper and bare key-value lines.
+    Finds the first non-wrapper opening tag and its matching closing tag,
+    correctly handling nested sections like <z3blobs><pgjsonb>...</pgjsonb></z3blobs>.
     """
-    match = re.search(
-        r"(<(?!zodb_db\b|zodb\b)\w[\w-]*\b[^/]*?>.*?</\w[\w-]*>)",
-        section,
-        re.DOTALL,
-    )
-    if match:
-        return match.group(1)
-    return None
+    # Find the first opening tag that isn't the zodb_db/zodb wrapper
+    start_match = re.search(r"<(?!zodb_db\b|zodb\b|/)(\w[\w-]*)", section)
+    if not start_match:
+        return None
+    tag_name = start_match.group(1)
+    start_pos = start_match.start()
+    # Find the last matching closing tag (inner nested ones close first)
+    close_pattern = rf"</{re.escape(tag_name)}\s*>"
+    close_matches = list(re.finditer(close_pattern, section))
+    if not close_matches:
+        return None
+    end_pos = close_matches[-1].end()
+    return section[start_pos:end_pos]
 
 
 def open_storage_from_zope_conf(path, db_name="main"):
