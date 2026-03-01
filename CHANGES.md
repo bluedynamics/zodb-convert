@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.0b5
+
+- Progress percentage with one decimal place precision in per-transaction log.
+
 ## 1.0.0b4
 
 - Blob count now reflects actual blob file data transfers, not pickle class

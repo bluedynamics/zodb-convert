@@ -90,7 +90,7 @@ class ProgressReporter:
     def _log_transaction(self, tid, record_count, blob_count, byte_size):
         pct = ""
         if self.total_txns:
-            pct = f" ({self.txn_count * 100 / self.total_txns:.0f}%)"
+            pct = f" ({self.txn_count * 100 / self.total_txns:.1f}%)"
         total = f"/{self.total_txns}" if self.total_txns else ""
 
         eta = ""
