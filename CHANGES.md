@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.0b4
+
+- Blob count now reflects actual blob file data transfers, not pickle class
+  references. Replaces `is_blob_record()` heuristic with direct `loadBlob()`
+  check per (oid, tid).
+
 ## 1.0.0b3
 
 - Fix `--incremental` resume when destination has wall-clock TIDs from ZODB.DB

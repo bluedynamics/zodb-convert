@@ -1,6 +1,5 @@
 """Core copy logic for ZODB storage conversion."""
 
-from ZODB.blob import is_blob_record
 from ZODB.interfaces import IBlobStorage
 from ZODB.interfaces import IBlobStorageRestoreable
 from ZODB.interfaces import IStorageIteration
@@ -139,16 +138,13 @@ def copy_transactions(
                 oid = record.oid
                 data = record.data
 
-                # Handle blob records
+                # Check for actual blob file data for this oid/tid
                 blob_filename = None
-                if (
-                    data
-                    and source_has_blobs
-                    and dest_has_blobs
-                    and is_blob_record(data)
-                ):
+                if data and source_has_blobs and dest_has_blobs:
                     try:
                         blob_filename = source.loadBlob(oid, record.tid)
+                    except (KeyError, OSError):
+                        pass  # No blob file data stored for this oid/tid
                     except Exception:
                         log.warning(
                             "Failed to load blob for oid=%s tid=%s, copying record only",
