@@ -92,8 +92,16 @@ class ProgressReporter:
         if self.total_txns:
             pct = f" ({self.txn_count * 100 / self.total_txns:.0f}%)"
         total = f"/{self.total_txns}" if self.total_txns else ""
+
+        eta = ""
+        elapsed = time.monotonic() - self.start_time
+        if self.total_txns and elapsed > 0 and self.txn_count > 0:
+            txn_rate = self.txn_count / elapsed
+            remaining = (self.total_txns - self.txn_count) / txn_rate
+            eta = f", ETA: {_format_duration(remaining)}"
+
         log.info(
-            "TX %s%s%s tid=%s %d records, %d blobs, %s",
+            "TX %s%s%s tid=%s %d records, %d blobs, %s%s",
             self.txn_count,
             total,
             pct,
@@ -101,6 +109,7 @@ class ProgressReporter:
             record_count,
             blob_count,
             _format_bytes(byte_size),
+            eta,
         )
 
     def _log_interval(self, now):

@@ -1,16 +1,14 @@
 # Changelog
 
-## 1.0.0b5
-
-- Graceful Ctrl-C handling: aborts any in-flight TPC transaction and exits
-  cleanly instead of dumping a traceback.
-
 ## 1.0.0b4
 
 - Blob count now reflects actual blob file data transfers, not pickle class
   references. Uses `loadBlob()` per (oid, tid) as the definitive check, with
   `is_blob_record()` as a fast pre-filter to avoid expensive stat calls on
   non-blob records.
+- Graceful Ctrl-C handling: aborts any in-flight TPC transaction and exits
+  cleanly instead of dumping a traceback.
+- ETA now shown on per-transaction log lines (`-v` mode).
 
 ## 1.0.0b3
 
