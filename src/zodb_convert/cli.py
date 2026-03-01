@@ -152,6 +152,9 @@ def main(argv=None):
 
         return 0
 
+    except KeyboardInterrupt:
+        log.warning("Interrupted by user, aborting...")
+        return 130
     except (ValueError, FileNotFoundError) as e:
         log.error("%s", e)
         sys.exit(1)

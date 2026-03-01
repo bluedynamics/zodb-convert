@@ -111,6 +111,9 @@ def copy_transactions(
     blob_count = 0
     temp_blobs = []
 
+    in_tpc = False  # Track whether a TPC transaction is in progress
+    txn_info = None
+
     try:
         for txn_info in fiter:
             tid = txn_info.tid
@@ -130,6 +133,7 @@ def copy_transactions(
                 destination.tpc_begin(txn_info, tid, txn_info.status)
             else:
                 destination.tpc_begin(txn_info)
+            in_tpc = True
 
             txn_byte_size = 0
             txn_blobs = 0
@@ -197,6 +201,7 @@ def copy_transactions(
 
             destination.tpc_vote(txn_info)
             committed_tid = destination.tpc_finish(txn_info)
+            in_tpc = False
             txn_count += 1
             blob_count += txn_blobs
 
@@ -216,6 +221,10 @@ def copy_transactions(
                 progress.on_transaction(tid, txn_records, txn_byte_size, txn_blobs)
 
     finally:
+        # Abort any in-flight TPC transaction
+        if in_tpc:
+            with contextlib.suppress(Exception):
+                destination.tpc_abort(txn_info)
         if hasattr(fiter, "close"):
             fiter.close()
         # Clean any remaining temp blobs

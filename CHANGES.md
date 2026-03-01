@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.0b5
+
+- Graceful Ctrl-C handling: aborts any in-flight TPC transaction and exits
+  cleanly instead of dumping a traceback.
+
 ## 1.0.0b4
 
 - Blob count now reflects actual blob file data transfers, not pickle class
