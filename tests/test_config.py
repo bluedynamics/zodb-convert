@@ -88,12 +88,11 @@ class TestZopeConfExtraction:
         with open(conf_path, "w") as f:
             f.write(zope_conf)
 
-        db = open_storage_from_zope_conf(conf_path, db_name="main")
+        storage = open_storage_from_zope_conf(conf_path, db_name="main")
         try:
-            assert db is not None
-            assert db.storage is not None
+            assert storage is not None
         finally:
-            db.close()
+            storage.close()
 
     def test_with_import_directives(self, temp_dir):
         """Verify %import lines are preserved."""
@@ -110,11 +109,11 @@ class TestZopeConfExtraction:
         with open(conf_path, "w") as f:
             f.write(zope_conf)
 
-        db = open_storage_from_zope_conf(conf_path, db_name="main")
+        storage = open_storage_from_zope_conf(conf_path, db_name="main")
         try:
-            assert db.storage is not None
+            assert storage is not None
         finally:
-            db.close()
+            storage.close()
 
     def test_named_db_selection(self, temp_dir):
         fs_path1 = os.path.join(temp_dir, "main.fs")
@@ -138,13 +137,12 @@ class TestZopeConfExtraction:
         with open(conf_path, "w") as f:
             f.write(zope_conf)
 
-        db = open_storage_from_zope_conf(conf_path, db_name="catalog")
+        storage = open_storage_from_zope_conf(conf_path, db_name="catalog")
         try:
-            assert db.storage is not None
-            # Verify it opened the catalog storage by checking the file path
-            assert db.storage.getName().endswith("catalog.fs")
+            assert storage is not None
+            assert storage.getName().endswith("catalog.fs")
         finally:
-            db.close()
+            storage.close()
 
     def test_db_name_not_found(self, temp_dir):
         zope_conf = """\
@@ -176,11 +174,11 @@ class TestZopeConfExtraction:
             f.write(zope_conf)
 
         # Should not raise (mount-point is not a valid ZODB config key)
-        db = open_storage_from_zope_conf(conf_path, db_name="main")
+        storage = open_storage_from_zope_conf(conf_path, db_name="main")
         try:
-            assert db.storage is not None
+            assert storage is not None
         finally:
-            db.close()
+            storage.close()
 
     def test_with_other_sections(self, temp_dir):
         """Non-ZODB sections in zope.conf should be ignored."""
@@ -197,11 +195,11 @@ class TestZopeConfExtraction:
         with open(conf_path, "w") as f:
             f.write(zope_conf)
 
-        db = open_storage_from_zope_conf(conf_path, db_name="main")
+        storage = open_storage_from_zope_conf(conf_path, db_name="main")
         try:
-            assert db.storage is not None
+            assert storage is not None
         finally:
-            db.close()
+            storage.close()
 
 
 class TestOpenStorages:
