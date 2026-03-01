@@ -3,8 +3,9 @@
 ## 1.0.0b4
 
 - Blob count now reflects actual blob file data transfers, not pickle class
-  references. Replaces `is_blob_record()` heuristic with direct `loadBlob()`
-  check per (oid, tid).
+  references. Uses `loadBlob()` per (oid, tid) as the definitive check, with
+  `is_blob_record()` as a fast pre-filter to avoid expensive stat calls on
+  non-blob records.
 
 ## 1.0.0b3
 
