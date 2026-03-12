@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.0b6
+
+- Add `--workers N` (`-w N`) CLI flag for parallel migration. When the
+  destination storage supports it (e.g. zodb-pgjsonb), delegates to
+  `destination.copyTransactionsFrom(source, workers=N)`. Falls back
+  gracefully to the generic sequential copier for storages that don't
+  support the parameter. No hard dependency on any specific storage.
+
 ## 1.0.0b5
 
 - Progress percentage with one decimal place precision in per-transaction log.

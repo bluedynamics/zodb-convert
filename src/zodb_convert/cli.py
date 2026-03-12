@@ -66,6 +66,18 @@ def parse_args(argv):
         help="Resume from the last transaction in the destination.",
     )
     behavior_group.add_argument(
+        "-w",
+        "--workers",
+        type=int,
+        default=1,
+        metavar="N",
+        help=(
+            "Number of parallel writer threads (default: 1). "
+            "Only effective when the destination storage supports it "
+            "(e.g. zodb-pgjsonb). Ignored for storages that don't."
+        ),
+    )
+    behavior_group.add_argument(
         "-v",
         "--verbose",
         action="count",
@@ -141,13 +153,17 @@ def main(argv=None):
             start_tid=start_tid,
             dry_run=args.dry_run,
             progress=progress,
+            workers=args.workers,
         )
 
-        progress.log_summary(txn_count, obj_count, blob_count)
-
-        if args.dry_run:
+        if txn_count is None:
+            # Parallel delegation — destination already logged progress.
+            log.info("Conversion complete (parallel delegation).")
+        elif args.dry_run:
+            progress.log_summary(txn_count, obj_count, blob_count)
             log.info("Dry run complete: %d transactions would be copied", txn_count)
         else:
+            progress.log_summary(txn_count, obj_count, blob_count)
             log.info("Conversion complete: %d transactions copied", txn_count)
 
         return 0

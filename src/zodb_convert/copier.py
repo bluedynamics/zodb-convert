@@ -81,8 +81,36 @@ def get_incremental_start_tid(source, destination):
     return p64(last_valid_int + 1)
 
 
+def _try_parallel_delegation(source, destination, workers):
+    """Try delegating to the destination's parallel copyTransactionsFrom.
+
+    Returns (txn_count, obj_count, blob_count) on success, or None if the
+    destination doesn't support the *workers* parameter.  No hard dependency
+    on any specific storage implementation — pure duck typing.
+    """
+    copy_method = getattr(destination, "copyTransactionsFrom", None)
+    if copy_method is None:
+        log.info("Destination has no copyTransactionsFrom, using generic copier.")
+        return None
+
+    try:
+        log.info("Delegating to destination.copyTransactionsFrom(workers=%d).", workers)
+        copy_method(source, workers=workers)
+    except TypeError:
+        # Destination's copyTransactionsFrom doesn't accept 'workers'.
+        log.info(
+            "Destination doesn't support parallel copy (no workers parameter), "
+            "falling back to generic sequential copier."
+        )
+        return None
+
+    # Destination handled everything including its own progress logging.
+    # Exact per-object counts are unavailable; return None as sentinel.
+    return None, None, None
+
+
 def copy_transactions(
-    source, destination, start_tid=None, dry_run=False, progress=None
+    source, destination, start_tid=None, dry_run=False, progress=None, workers=1
 ):
     """Copy transactions from source to destination storage.
 
@@ -90,8 +118,19 @@ def copy_transactions(
     Uses IStorageRestoreable.restore() on destination if available,
     otherwise falls back to store().
 
+    When *workers* > 1, attempts to delegate to the destination's
+    ``copyTransactionsFrom(source, workers=N)`` for parallel writing.
+    This requires no hard dependency — if the destination doesn't
+    support the *workers* keyword, falls back to sequential copy.
+
     Returns (txn_count, obj_count, blob_count).
     """
+    if workers > 1 and not dry_run and start_tid is None:
+        result = _try_parallel_delegation(source, destination, workers)
+        if result is not None:
+            return result
+        # Fall through to generic sequential copier.
+
     caps = detect_capabilities(source, destination)
 
     if not caps["source_has_iterator"]:
