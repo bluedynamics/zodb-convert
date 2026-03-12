@@ -107,9 +107,15 @@ def _setup_logging(verbose):
 
     handler = logging.StreamHandler(sys.stderr)
     handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
-    logger = logging.getLogger("zodb-convert")
-    logger.setLevel(level)
-    logger.addHandler(handler)
+
+    # Configure root logger so destination storage progress (e.g.
+    # zodb_pgjsonb.storage) is visible during parallel delegation.
+    root = logging.getLogger()
+    root.setLevel(level)
+    root.addHandler(handler)
+
+    # Keep zodb-convert logger explicit for direct use.
+    logging.getLogger("zodb-convert").setLevel(level)
 
 
 def main(argv=None):
