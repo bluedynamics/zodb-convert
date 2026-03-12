@@ -7,6 +7,8 @@
   `destination.copyTransactionsFrom(source, workers=N)`. Falls back
   gracefully to the generic sequential copier for storages that don't
   support the parameter. No hard dependency on any specific storage.
+- Fix logging: configure root logger so destination storage progress
+  (e.g. from zodb-pgjsonb parallel workers) is visible with `-v`.
 
 ## 1.0.0b5
 
