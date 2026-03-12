@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.0b8
+
+- Remove source transaction counting (saves a full iteration over 200k+
+  databases). Progress is now based on unique OIDs seen vs `len(source)`
+  (O(1) for FileStorage) for approximate percentage and ETA.
+- Smooth ETA with exponential moving average (EMA) on OID processing rate
+  to avoid jumpy estimates from variable transaction sizes.
+
 ## 1.0.0b7
 
 - Fix logging: configure root logger so destination storage progress
