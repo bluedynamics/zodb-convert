@@ -159,12 +159,14 @@ def copy_transactions(
 
             if dry_run:
                 rec_count = 0
-                for _record in txn_info:
+                dry_oids = []
+                for record in txn_info:
                     rec_count += 1
+                    dry_oids.append(record.oid)
                 obj_count += rec_count
                 txn_count += 1
                 if progress:
-                    progress.on_transaction(tid, rec_count, 0, 0)
+                    progress.on_transaction(tid, rec_count, 0, 0, oids=dry_oids)
                 continue
 
             # Begin transaction on destination with original TID
@@ -177,9 +179,11 @@ def copy_transactions(
             txn_byte_size = 0
             txn_blobs = 0
             txn_records = 0
+            txn_oids = []
 
             for record in txn_info:
                 oid = record.oid
+                txn_oids.append(oid)
                 data = record.data
 
                 # Check for actual blob file data for this oid/tid.
@@ -257,7 +261,9 @@ def copy_transactions(
             temp_blobs.clear()
 
             if progress:
-                progress.on_transaction(tid, txn_records, txn_byte_size, txn_blobs)
+                progress.on_transaction(
+                    tid, txn_records, txn_byte_size, txn_blobs, oids=txn_oids
+                )
 
     finally:
         # Abort any in-flight TPC transaction

@@ -138,20 +138,14 @@ def main(argv=None):
         if args.dry_run:
             log.info("Dry run mode: no data will be written")
 
-        # Count total transactions for progress reporting.
-        # Skip when parallel delegation will handle its own counting.
-        total_txns = None
-        if args.workers <= 1:
-            try:
-                it = source.iterator(start=start_tid)
-                total_txns = sum(1 for _ in it)
-                if hasattr(it, "close"):
-                    it.close()
-            except Exception:
-                total_txns = None
+        # len(source) returns OID count (O(1) for FileStorage) — used
+        # for approximate progress percentage without iterating.
+        total_oids = 0
+        with contextlib.suppress(TypeError):
+            total_oids = len(source)
 
         progress = ProgressReporter(
-            total_txns=total_txns,
+            total_oids=total_oids,
             verbose=args.verbose >= 1,
         )
 
