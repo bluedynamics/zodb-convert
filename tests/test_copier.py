@@ -1,4 +1,6 @@
+from unittest.mock import MagicMock
 from ZODB.utils import u64
+from zodb_convert.copier import _try_parallel_delegation
 from zodb_convert.copier import copy_transactions
 from zodb_convert.copier import detect_capabilities
 from zodb_convert.copier import get_incremental_start_tid
@@ -309,3 +311,70 @@ class TestIncremental:
 
         source.close()
         dest.close()
+
+
+class TestParallelDelegation:
+    """Test _try_parallel_delegation and workers path in copy_transactions."""
+
+    def test_delegation_success(self):
+        """Destination supports copyTransactionsFrom(workers=N)."""
+        source = MagicMock()
+        dest = MagicMock()
+        dest.copyTransactionsFrom = MagicMock()
+
+        result = _try_parallel_delegation(source, dest, workers=4)
+        assert result == (None, None, None)
+        dest.copyTransactionsFrom.assert_called_once_with(source, workers=4)
+
+    def test_delegation_no_method(self):
+        """Destination has no copyTransactionsFrom at all."""
+        source = MagicMock()
+        dest = MagicMock(spec=[])  # no attributes
+
+        result = _try_parallel_delegation(source, dest, workers=4)
+        assert result is None
+
+    def test_delegation_no_workers_support(self):
+        """Destination's copyTransactionsFrom doesn't accept workers kwarg."""
+        source = MagicMock()
+        dest = MagicMock()
+        dest.copyTransactionsFrom = MagicMock(side_effect=TypeError("unexpected kwarg"))
+
+        result = _try_parallel_delegation(source, dest, workers=2)
+        assert result is None
+
+    def test_copy_transactions_delegates_when_workers_gt_1(
+        self, populated_source, dest_filestorage
+    ):
+        """copy_transactions with workers>1 tries delegation, falls back on TypeError."""
+        # FileStorage.copyTransactionsFrom doesn't accept workers → TypeError fallback
+        txn_count, obj_count, _blob_count = copy_transactions(
+            populated_source, dest_filestorage, workers=2
+        )
+        # Should have fallen back to sequential copy and succeeded
+        assert txn_count == 4  # initial root + 3 explicit
+        assert obj_count > 0
+
+    def test_copy_transactions_skips_delegation_on_dry_run(
+        self, populated_source, dest_filestorage
+    ):
+        """workers>1 is ignored when dry_run=True."""
+        txn_count, obj_count, _blob_count = copy_transactions(
+            populated_source, dest_filestorage, dry_run=True, workers=4
+        )
+        assert txn_count == 4
+        assert obj_count > 0
+        # Destination should still be empty (dry run)
+        assert storage_has_data(dest_filestorage) is False
+
+    def test_copy_transactions_skips_delegation_on_incremental(
+        self, populated_source, dest_filestorage
+    ):
+        """workers>1 is ignored when start_tid is set."""
+        from ZODB.utils import p64
+
+        txn_count, obj_count, _blob_count = copy_transactions(
+            populated_source, dest_filestorage, start_tid=p64(0), workers=4
+        )
+        assert txn_count == 4
+        assert obj_count > 0
