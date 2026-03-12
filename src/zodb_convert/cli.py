@@ -138,15 +138,17 @@ def main(argv=None):
         if args.dry_run:
             log.info("Dry run mode: no data will be written")
 
-        # Count total transactions for progress reporting
+        # Count total transactions for progress reporting.
+        # Skip when parallel delegation will handle its own counting.
         total_txns = None
-        try:
-            it = source.iterator(start=start_tid)
-            total_txns = sum(1 for _ in it)
-            if hasattr(it, "close"):
-                it.close()
-        except Exception:
-            total_txns = None
+        if args.workers <= 1:
+            try:
+                it = source.iterator(start=start_tid)
+                total_txns = sum(1 for _ in it)
+                if hasattr(it, "close"):
+                    it.close()
+            except Exception:
+                total_txns = None
 
         progress = ProgressReporter(
             total_txns=total_txns,
