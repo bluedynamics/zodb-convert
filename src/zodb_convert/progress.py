@@ -37,12 +37,13 @@ class ProgressReporter:
     """Progress reporter for ZODB storage conversion.
 
     Uses total_oids (from len(source), O(1) for FileStorage) for approximate
-    progress percentage based on unique OIDs seen so far.
-
-    Tier 1: Per-transaction logging in verbose mode.
-    Tier 2: Interval-based logging (every 10s or 100 txns).
-    Tier 3: Summary at completion.
+    progress percentage based on unique OIDs seen so far.  ETA is smoothed
+    via an exponential moving average (EMA) of the OID processing rate to
+    avoid jumpy estimates from variable transaction sizes.
     """
+
+    EMA_ALPHA = 0.1  # smoothing factor — lower = smoother, higher = more responsive
+    EMA_MIN_INTERVAL = 1.0  # min seconds between rate samples
 
     def __init__(self, total_oids=0, verbose=False, log_interval=10, log_count=100):
         self.total_oids = total_oids
@@ -60,10 +61,38 @@ class ProgressReporter:
         self.last_log_time = self.start_time
         self.last_log_txn_count = 0
 
+        # EMA rate tracking (OIDs/second)
+        self._ema_rate = 0.0
+        self._last_ema_oids = 0
+        self._last_ema_time = self.start_time
+
     def _pct(self):
         if self.total_oids and self._seen_oids:
             return len(self._seen_oids) * 100.0 / self.total_oids
         return 0
+
+    def _update_ema(self, now):
+        dt = now - self._last_ema_time
+        if dt < self.EMA_MIN_INTERVAL:
+            return
+        new_oids = len(self._seen_oids) - self._last_ema_oids
+        instant_rate = new_oids / dt
+        if self._ema_rate == 0:
+            self._ema_rate = instant_rate
+        else:
+            self._ema_rate = (
+                self.EMA_ALPHA * instant_rate + (1 - self.EMA_ALPHA) * self._ema_rate
+            )
+        self._last_ema_oids = len(self._seen_oids)
+        self._last_ema_time = now
+
+    def _eta(self):
+        if not self.total_oids or self._ema_rate <= 0:
+            return ""
+        remaining_oids = self.total_oids - len(self._seen_oids)
+        if remaining_oids <= 0:
+            return ""
+        return f", ETA: {_format_duration(remaining_oids / self._ema_rate)}"
 
     def on_transaction(self, tid, record_count, byte_size, blob_count, oids=()):
         """Called after each transaction is copied."""
@@ -74,6 +103,7 @@ class ProgressReporter:
         self._seen_oids.update(oids)
 
         now = time.monotonic()
+        self._update_ema(now)
         is_first = self.txn_count == 1
 
         if self.verbose or is_first:
@@ -91,14 +121,8 @@ class ProgressReporter:
         )
 
     def _log_transaction(self, tid, record_count, blob_count, byte_size):
-        elapsed = time.monotonic() - self.start_time
         pct = self._pct()
         pct_str = f" ~{pct:.1f}%" if pct else ""
-
-        eta = ""
-        if pct > 0 and elapsed > 0:
-            remaining = elapsed * (100 - pct) / pct
-            eta = f", ETA: {_format_duration(remaining)}"
 
         log.info(
             "TX %s%s tid=%s %d records, %d blobs, %s%s",
@@ -108,7 +132,7 @@ class ProgressReporter:
             record_count,
             blob_count,
             _format_bytes(byte_size),
-            eta,
+            self._eta(),
         )
 
     def _log_interval(self, now):
@@ -124,9 +148,9 @@ class ProgressReporter:
         parts.append(f"{self.obj_count:,} objects, {self.blob_count:,} blobs")
         parts.append(f"{_format_bytes(byte_rate)}/s, {txn_rate:.0f} txn/s")
 
-        if pct > 0 and elapsed > 0:
-            remaining = elapsed * (100 - pct) / pct
-            parts.append(f"ETA: {_format_duration(remaining)}")
+        eta = self._eta()
+        if eta:
+            parts.append(eta.lstrip(", "))
 
         log.info(" | ".join(parts))
 

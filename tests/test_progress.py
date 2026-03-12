@@ -124,3 +124,41 @@ class TestProgressReporter:
         )
         assert len(p._seen_oids) == 1
         assert p._pct() == 10.0  # 1/10
+
+    def test_ema_initializes_on_first_sample(self):
+        """EMA rate is seeded from the first measurement."""
+        p = ProgressReporter(total_oids=100)
+        assert p._ema_rate == 0.0
+        # Simulate time passing and OIDs arriving
+        p._seen_oids.update(range(10))
+        p._last_ema_time = p.start_time  # ensure dt > MIN_INTERVAL
+        p._update_ema(p.start_time + 2.0)
+        assert p._ema_rate > 0  # seeded, not zero
+
+    def test_ema_smooths_rate_changes(self):
+        """EMA blends new samples instead of jumping."""
+        p = ProgressReporter(total_oids=1000)
+        # First sample: 100 oids in 1s = 100/s
+        p._seen_oids.update(range(100))
+        p._update_ema(p.start_time + 1.0)
+        rate_after_first = p._ema_rate
+        assert rate_after_first == 100.0  # first sample seeds directly
+
+        # Second sample: 10 oids in 1s = 10/s — should NOT jump to 10
+        p._seen_oids.update(range(100, 110))
+        p._update_ema(p.start_time + 2.0)
+        assert p._ema_rate > 10  # smoothed, not instant
+        assert p._ema_rate < 100  # moved toward new rate
+
+    def test_eta_empty_without_oids(self):
+        """No ETA when total_oids is 0."""
+        p = ProgressReporter(total_oids=0)
+        assert p._eta() == ""
+
+    def test_eta_returns_string_with_data(self):
+        """ETA available after EMA has data."""
+        p = ProgressReporter(total_oids=100)
+        p._seen_oids.update(range(50))
+        p._update_ema(p.start_time + 1.0)
+        eta = p._eta()
+        assert eta.startswith(", ETA:")
