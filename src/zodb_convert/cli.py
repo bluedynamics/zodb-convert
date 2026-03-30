@@ -115,7 +115,13 @@ def parse_args(argv):
     args = parser.parse_args(argv)
 
     # Require at least one source/destination specification
-    if not args.config_file and not args.source_zope_conf and not args.dest_zope_conf:
+    # (--upload-blobs only needs a destination, validated later)
+    if (
+        not args.config_file
+        and not args.source_zope_conf
+        and not args.dest_zope_conf
+        and not args.upload_blobs
+    ):
         parser.error(
             "At least one of config_file, --source-zope-conf, or --dest-zope-conf is required."
         )
@@ -145,10 +151,79 @@ def _setup_logging(verbose):
     logging.getLogger("zodb-convert").setLevel(level)
 
 
+def _open_destination(args):
+    """Open only the destination storage from CLI args.
+
+    Returns (destination_storage, closables).
+    """
+    from zodb_convert.config import open_storage_from_zope_conf
+    from zodb_convert.config import open_storages_from_config
+
+    destination = None
+    closables = []
+
+    if args.config_file:
+        _cfg_source, cfg_dest = open_storages_from_config(args.config_file)
+        if cfg_dest is not None:
+            destination = cfg_dest
+        # Close unused source if opened
+        if _cfg_source is not None:
+            closables.append(_cfg_source)
+
+    if args.dest_zope_conf:
+        if destination is not None:
+            raise ValueError(
+                "Destination specified in both config file and --dest-zope-conf"
+            )
+        db = open_storage_from_zope_conf(args.dest_zope_conf, args.dest_db)
+        destination = db.storage
+        closables.append(db)
+
+    if destination is None:
+        raise ValueError(
+            "No destination storage configured. Use a config file or --dest-zope-conf."
+        )
+
+    return destination, closables
+
+
 def main(argv=None):
     """Main entry point for zodb-convert."""
     args = parse_args(argv if argv is not None else sys.argv[1:])
     _setup_logging(args.verbose)
+
+    if args.upload_blobs:
+        from zodb_convert.manifest import upload_from_manifest
+
+        closables = []
+        try:
+            destination, closables = _open_destination(args)
+            s3_client = getattr(destination, "_s3_client", None)
+            if s3_client is None:
+                log.error("Destination storage has no S3 client configured")
+                return 1
+            stats = upload_from_manifest(
+                args.upload_blobs,
+                s3_client,
+                workers=args.workers or 8,
+            )
+            if stats["failed"]:
+                log.error("%d blob upload(s) failed", stats["failed"])
+                return 1
+            return 0
+        except KeyboardInterrupt:
+            log.warning("Interrupted by user, aborting...")
+            return 130
+        except (ValueError, FileNotFoundError) as e:
+            log.error("%s", e)
+            sys.exit(1)
+        except Exception as e:
+            log.error("Upload failed: %s", e, exc_info=True)
+            sys.exit(2)
+        finally:
+            for obj in closables:
+                with contextlib.suppress(Exception):
+                    obj.close()
 
     closables = []
     try:
