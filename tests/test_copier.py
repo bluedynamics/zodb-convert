@@ -326,6 +326,21 @@ class TestParallelDelegation:
         assert result == (None, None, None)
         dest.copyTransactionsFrom.assert_called_once_with(source, workers=4)
 
+    def test_delegation_with_start_tid(self):
+        """Delegation passes start_tid when set."""
+        from ZODB.utils import p64
+
+        source = MagicMock()
+        dest = MagicMock()
+        dest.copyTransactionsFrom = MagicMock()
+
+        start = p64(100)
+        result = _try_parallel_delegation(source, dest, workers=4, start_tid=start)
+        assert result == (None, None, None)
+        dest.copyTransactionsFrom.assert_called_once_with(
+            source, workers=4, start_tid=start
+        )
+
     def test_delegation_no_method(self):
         """Destination has no copyTransactionsFrom at all."""
         source = MagicMock()
@@ -343,16 +358,37 @@ class TestParallelDelegation:
         result = _try_parallel_delegation(source, dest, workers=2)
         assert result is None
 
+    def test_delegation_start_tid_not_supported(self):
+        """Destination doesn't support start_tid -- falls back."""
+        from ZODB.utils import p64
+
+        source = MagicMock()
+        dest = MagicMock()
+        dest.copyTransactionsFrom = MagicMock(side_effect=TypeError("unexpected kwarg"))
+
+        result = _try_parallel_delegation(source, dest, workers=2, start_tid=p64(100))
+        assert result is None
+
     def test_copy_transactions_delegates_when_workers_gt_1(
         self, populated_source, dest_filestorage
     ):
         """copy_transactions with workers>1 tries delegation, falls back on TypeError."""
-        # FileStorage.copyTransactionsFrom doesn't accept workers → TypeError fallback
         txn_count, obj_count, _blob_count = copy_transactions(
             populated_source, dest_filestorage, workers=2
         )
-        # Should have fallen back to sequential copy and succeeded
         assert txn_count == 4  # initial root + 3 explicit
+        assert obj_count > 0
+
+    def test_copy_transactions_delegates_with_start_tid(
+        self, populated_source, dest_filestorage
+    ):
+        """copy_transactions with workers>1 and start_tid delegates both."""
+        from ZODB.utils import p64
+
+        txn_count, obj_count, _blob_count = copy_transactions(
+            populated_source, dest_filestorage, start_tid=p64(0), workers=4
+        )
+        assert txn_count == 4
         assert obj_count > 0
 
     def test_copy_transactions_skips_delegation_on_dry_run(
@@ -364,17 +400,4 @@ class TestParallelDelegation:
         )
         assert txn_count == 4
         assert obj_count > 0
-        # Destination should still be empty (dry run)
         assert storage_has_data(dest_filestorage) is False
-
-    def test_copy_transactions_skips_delegation_on_incremental(
-        self, populated_source, dest_filestorage
-    ):
-        """workers>1 is ignored when start_tid is set."""
-        from ZODB.utils import p64
-
-        txn_count, obj_count, _blob_count = copy_transactions(
-            populated_source, dest_filestorage, start_tid=p64(0), workers=4
-        )
-        assert txn_count == 4
-        assert obj_count > 0
