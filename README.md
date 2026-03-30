@@ -103,6 +103,13 @@ Where `convert.conf` contains only the destination storage section.
 
 - `--dry-run` — show what would be copied without making changes
 - `--incremental` — resume from the last transaction in the destination
+- `-w N` / `--workers N` — number of parallel writer threads (default: 1)
+- `--background-blobs` — upload blobs to S3 in a background thread pool,
+  decoupled from PG writes (faster for large migrations)
+- `--deferred-blobs PATH` — write blob upload tasks to a manifest file
+  instead of uploading during migration
+- `--upload-blobs MANIFEST` — upload deferred blobs from a manifest file
+  (created by `--deferred-blobs`)
 - `-v` / `--verbose` — increase verbosity (`-v` for INFO, `-vv` for DEBUG)
 
 ## Source Code and Contributions

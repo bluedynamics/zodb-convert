@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.0.0b10
+
+- Add `--background-blobs` flag: upload blobs to S3 in a background thread pool,
+  decoupled from PG writes. Significantly faster for large migrations where S3
+  latency is the bottleneck. Only effective with parallel workers (`-w`).
+- Add `--deferred-blobs PATH` flag: write blob upload tasks to a manifest file
+  instead of uploading to S3 during migration. Process the manifest later with
+  `--upload-blobs`.
+- Add `--upload-blobs MANIFEST` flag: upload deferred blobs from a manifest file
+  (created by `--deferred-blobs`) with parallel workers and retry logic.
+
 ## 1.0.0b9
 
 - Support `--incremental -w N` together. Previously, `--incremental`
