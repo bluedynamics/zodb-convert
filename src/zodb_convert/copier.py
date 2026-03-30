@@ -81,7 +81,7 @@ def get_incremental_start_tid(source, destination):
     return p64(last_valid_int + 1)
 
 
-def _try_parallel_delegation(source, destination, workers):
+def _try_parallel_delegation(source, destination, workers, start_tid=None):
     """Try delegating to the destination's parallel copyTransactionsFrom.
 
     Returns (txn_count, obj_count, blob_count) on success, or None if the
@@ -93,19 +93,25 @@ def _try_parallel_delegation(source, destination, workers):
         log.info("Destination has no copyTransactionsFrom, using generic copier.")
         return None
 
+    kwargs = {"workers": workers}
+    if start_tid is not None:
+        kwargs["start_tid"] = start_tid
+
     try:
-        log.info("Delegating to destination.copyTransactionsFrom(workers=%d).", workers)
-        copy_method(source, workers=workers)
-    except TypeError:
-        # Destination's copyTransactionsFrom doesn't accept 'workers'.
         log.info(
-            "Destination doesn't support parallel copy (no workers parameter), "
+            "Delegating to destination.copyTransactionsFrom(%s).",
+            ", ".join(f"{k}={v!r}" for k, v in kwargs.items()),
+        )
+        copy_method(source, **kwargs)
+    except TypeError:
+        # Destination's copyTransactionsFrom doesn't accept these kwargs.
+        log.info(
+            "Destination doesn't support parallel copy, "
             "falling back to generic sequential copier."
         )
         return None
 
     # Destination handled everything including its own progress logging.
-    # Exact per-object counts are unavailable; return None as sentinel.
     return None, None, None
 
 
@@ -125,8 +131,8 @@ def copy_transactions(
 
     Returns (txn_count, obj_count, blob_count).
     """
-    if workers > 1 and not dry_run and start_tid is None:
-        result = _try_parallel_delegation(source, destination, workers)
+    if workers > 1 and not dry_run:
+        result = _try_parallel_delegation(source, destination, workers, start_tid)
         if result is not None:
             return result
         # Fall through to generic sequential copier.
