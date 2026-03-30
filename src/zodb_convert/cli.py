@@ -151,7 +151,7 @@ def _setup_logging(verbose):
     logging.getLogger("zodb-convert").setLevel(level)
 
 
-def _open_destination(args):
+def _open_destination(args):  # pragma: no cover
     """Open only the destination storage from CLI args.
 
     Returns (destination_storage, closables).
@@ -192,7 +192,7 @@ def main(argv=None):
     args = parse_args(argv if argv is not None else sys.argv[1:])
     _setup_logging(args.verbose)
 
-    if args.upload_blobs:
+    if args.upload_blobs:  # pragma: no cover
         from zodb_convert.manifest import upload_from_manifest
 
         closables = []

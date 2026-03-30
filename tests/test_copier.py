@@ -401,3 +401,54 @@ class TestParallelDelegation:
         assert txn_count == 4
         assert obj_count > 0
         assert storage_has_data(dest_filestorage) is False
+
+    def test_delegation_includes_blob_mode_when_not_inline(self):
+        """blob_mode is passed to delegation when not 'inline'."""
+        source = MagicMock()
+        dest = MagicMock()
+        dest.copyTransactionsFrom = MagicMock()
+
+        result = _try_parallel_delegation(
+            source, dest, workers=4, blob_mode="background"
+        )
+        assert result == (None, None, None)
+        dest.copyTransactionsFrom.assert_called_once_with(
+            source, workers=4, blob_mode="background"
+        )
+
+    def test_delegation_excludes_blob_mode_when_inline(self):
+        """blob_mode='inline' (default) is NOT passed to delegation."""
+        source = MagicMock()
+        dest = MagicMock()
+        dest.copyTransactionsFrom = MagicMock()
+
+        result = _try_parallel_delegation(source, dest, workers=4, blob_mode="inline")
+        assert result == (None, None, None)
+        dest.copyTransactionsFrom.assert_called_once_with(source, workers=4)
+
+    def test_delegation_deferred_blob_mode(self):
+        """Deferred blob mode passes path in blob_mode kwarg."""
+        source = MagicMock()
+        dest = MagicMock()
+        dest.copyTransactionsFrom = MagicMock()
+
+        result = _try_parallel_delegation(
+            source, dest, workers=2, blob_mode="deferred:/tmp/manifest.tsv"
+        )
+        assert result == (None, None, None)
+        dest.copyTransactionsFrom.assert_called_once_with(
+            source, workers=2, blob_mode="deferred:/tmp/manifest.tsv"
+        )
+
+    def test_copy_transactions_passes_blob_mode(self):
+        """copy_transactions passes blob_mode to _try_parallel_delegation."""
+        source = MagicMock()
+        dest = MagicMock()
+        dest.copyTransactionsFrom = MagicMock()
+
+        result = copy_transactions(source, dest, workers=2, blob_mode="background")
+        # Delegation succeeded
+        assert result == (None, None, None)
+        dest.copyTransactionsFrom.assert_called_once_with(
+            source, workers=2, blob_mode="background"
+        )

@@ -59,3 +59,49 @@ class TestUploadFromManifest:
 
         assert stats["skipped"] == 1
         assert s3.upload_file.call_count == 0
+
+    def test_skips_malformed_lines(self, tmp_path):
+        s3 = MagicMock()
+        manifest = tmp_path / "manifest.tsv"
+        blob = tmp_path / "blob0"
+        blob.write_bytes(b"data")
+        # Mix valid and malformed lines
+        manifest.write_text(f"too\tfew\nfields\n{blob}\tblobs/0.blob\t0\t4\n\n")
+
+        stats = upload_from_manifest(str(manifest), s3, workers=1)
+
+        assert stats["uploaded"] == 1
+        assert s3.upload_file.call_count == 1
+
+    def test_empty_manifest(self, tmp_path):
+        s3 = MagicMock()
+        manifest = tmp_path / "manifest.tsv"
+        manifest.write_text("")
+
+        stats = upload_from_manifest(str(manifest), s3, workers=1)
+
+        assert stats["uploaded"] == 0
+        assert stats["failed"] == 0
+        assert stats["skipped"] == 0
+
+    def test_retry_exhaustion(self, tmp_path):
+        """All retries fail, triggering the retry-exhaustion logging path."""
+        s3 = MagicMock()
+        s3.upload_file.side_effect = Exception("transient")
+        manifest = tmp_path / "manifest.tsv"
+        blob = tmp_path / "blob0"
+        blob.write_bytes(b"data")
+        manifest.write_text(f"{blob}\tblobs/0.blob\t0\t4\n")
+
+        stats = upload_from_manifest(
+            str(manifest),
+            s3,
+            workers=1,
+            max_retries=3,
+            retry_base_delay=0,
+        )
+
+        assert stats["failed"] == 1
+        assert stats["uploaded"] == 0
+        # All 3 attempts were made
+        assert s3.upload_file.call_count == 3
