@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.0.0b10
 
 - Add `--background-blobs` flag: upload blobs to S3 in a background thread pool,
   decoupled from PG writes. Significantly faster for large migrations where S3
