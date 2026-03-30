@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.0b9
+
+- Support `--incremental -w N` together. Previously, `--incremental`
+  forced a fallback to sequential copy even when `-w` was specified.
+  Now passes `start_tid` through to the destination's parallel
+  `copyTransactionsFrom()` for resumable parallel imports.
+
 ## 1.0.0b8
 
 - Remove source transaction counting (saves a full iteration over 200k+
