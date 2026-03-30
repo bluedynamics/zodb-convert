@@ -81,7 +81,9 @@ def get_incremental_start_tid(source, destination):
     return p64(last_valid_int + 1)
 
 
-def _try_parallel_delegation(source, destination, workers, start_tid=None):
+def _try_parallel_delegation(
+    source, destination, workers, start_tid=None, blob_mode="inline"
+):
     """Try delegating to the destination's parallel copyTransactionsFrom.
 
     Returns (txn_count, obj_count, blob_count) on success, or None if the
@@ -96,6 +98,8 @@ def _try_parallel_delegation(source, destination, workers, start_tid=None):
     kwargs = {"workers": workers}
     if start_tid is not None:
         kwargs["start_tid"] = start_tid
+    if blob_mode != "inline":
+        kwargs["blob_mode"] = blob_mode
 
     try:
         log.info(
@@ -116,7 +120,13 @@ def _try_parallel_delegation(source, destination, workers, start_tid=None):
 
 
 def copy_transactions(
-    source, destination, start_tid=None, dry_run=False, progress=None, workers=1
+    source,
+    destination,
+    start_tid=None,
+    dry_run=False,
+    progress=None,
+    workers=1,
+    blob_mode="inline",
 ):
     """Copy transactions from source to destination storage.
 
@@ -132,7 +142,9 @@ def copy_transactions(
     Returns (txn_count, obj_count, blob_count).
     """
     if workers > 1 and not dry_run:
-        result = _try_parallel_delegation(source, destination, workers, start_tid)
+        result = _try_parallel_delegation(
+            source, destination, workers, start_tid, blob_mode
+        )
         if result is not None:
             return result
         # Fall through to generic sequential copier.

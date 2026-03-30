@@ -78,6 +78,33 @@ def parse_args(argv):
         ),
     )
     behavior_group.add_argument(
+        "--background-blobs",
+        action="store_true",
+        help=(
+            "Upload blobs to S3 in a background thread pool, decoupled "
+            "from PG writes. Faster for large migrations. Only effective "
+            "with parallel workers (-w)."
+        ),
+    )
+    behavior_group.add_argument(
+        "--deferred-blobs",
+        metavar="PATH",
+        help=(
+            "Write blob upload tasks to a manifest file instead of "
+            "uploading to S3. Use --upload-blobs to process later. "
+            "Only effective with parallel workers (-w)."
+        ),
+    )
+    behavior_group.add_argument(
+        "--upload-blobs",
+        metavar="MANIFEST",
+        help=(
+            "Upload deferred blobs from a manifest file (created by "
+            "--deferred-blobs). Requires a destination config for S3 "
+            "credentials. Does not copy transactions."
+        ),
+    )
+    behavior_group.add_argument(
         "-v",
         "--verbose",
         action="count",
@@ -135,6 +162,12 @@ def main(argv=None):
             else:
                 log.info("Incremental mode: destination is empty, full copy")
 
+        blob_mode = "inline"
+        if args.background_blobs:
+            blob_mode = "background"
+        elif args.deferred_blobs:
+            blob_mode = f"deferred:{args.deferred_blobs}"
+
         if args.dry_run:
             log.info("Dry run mode: no data will be written")
 
@@ -156,6 +189,7 @@ def main(argv=None):
             dry_run=args.dry_run,
             progress=progress,
             workers=args.workers,
+            blob_mode=blob_mode,
         )
 
         if txn_count is None:
