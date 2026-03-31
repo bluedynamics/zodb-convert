@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.0b11
+
+- `--upload-blobs` no longer opens source or destination storage connections (#5).
+  New standalone S3 flags (`--s3-bucket`, `--s3-endpoint-url`, `--s3-region`,
+  `--s3-access-key`, `--s3-secret-key`) allow blob uploads without any database
+  connections, enabling parallel execution with an ongoing `--deferred-blobs` import.
+
 ## 1.0.0b10
 
 - Add `--background-blobs` flag: upload blobs to S3 in a background thread pool,
