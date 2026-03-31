@@ -6,6 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 import contextlib
 import logging
 import os
+import threading
 import time
 
 
@@ -40,11 +41,15 @@ def upload_from_manifest(
             blob_path, s3_key, zoid_str, size_str = parts
             entries.append((blob_path, s3_key, int(zoid_str), int(size_str)))
 
-    logger.info("Manifest: %d blob(s) to upload", len(entries))
+    total = len(entries)
+    logger.info("Manifest: %d blob(s) to upload with %d workers", total, workers)
 
     uploaded = 0
     failed = 0
     skipped = 0
+
+    # Shutdown signal — checked by retry loops to avoid sleeping during teardown.
+    _shutdown = threading.Event()
 
     def _upload_one(blob_path, s3_key, zoid, size):
         if not os.path.exists(blob_path):
@@ -54,6 +59,8 @@ def upload_from_manifest(
             return "skipped"
         last_exc = None
         for attempt in range(max_retries):
+            if _shutdown.is_set():
+                return "failed"
             try:
                 s3_client.upload_file(blob_path, s3_key)
                 if cleanup:
@@ -62,6 +69,8 @@ def upload_from_manifest(
                 return "uploaded"
             except Exception as exc:
                 last_exc = exc
+                if _shutdown.is_set():
+                    return "failed"
                 if attempt < max_retries - 1:
                     delay = retry_base_delay * (2**attempt)
                     logger.warning(
@@ -73,7 +82,8 @@ def upload_from_manifest(
                         exc,
                         delay,
                     )
-                    time.sleep(delay)
+                    # Interruptible sleep — wakes immediately on shutdown.
+                    _shutdown.wait(delay)
         logger.error(
             "Upload oid=0x%016x FAILED after %d attempts: %s",
             zoid,
@@ -83,16 +93,37 @@ def upload_from_manifest(
         return "failed"
 
     t0 = time.time()
-    with ThreadPoolExecutor(max_workers=workers) as pool:
-        futures = {pool.submit(_upload_one, *entry): entry[1] for entry in entries}
-        for fut in as_completed(futures):
-            result = fut.result()
-            if result == "uploaded":
-                uploaded += 1
-            elif result == "failed":
-                failed += 1
-            elif result == "skipped":
-                skipped += 1
+    try:
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = {pool.submit(_upload_one, *entry): entry[1] for entry in entries}
+            for fut in as_completed(futures):
+                result = fut.result()
+                if result == "uploaded":
+                    uploaded += 1
+                elif result == "failed":
+                    failed += 1
+                elif result == "skipped":
+                    skipped += 1
+
+                # Progress logging every 100 completions.
+                done = uploaded + failed + skipped
+                if done % 100 == 0 or done == total:
+                    elapsed = time.time() - t0
+                    rate = done / elapsed if elapsed > 0 else 0
+                    logger.info(
+                        "Progress: %d/%d (%.0f/s) — %d uploaded, %d failed, %d skipped",
+                        done,
+                        total,
+                        rate,
+                        uploaded,
+                        failed,
+                        skipped,
+                    )
+    except KeyboardInterrupt:
+        logger.warning("Interrupted — signalling workers to stop ...")
+        _shutdown.set()
+        # Pool __exit__ will wait for running futures (but retry sleeps
+        # wake immediately via _shutdown.wait).
 
     elapsed = time.time() - t0
     logger.info(
