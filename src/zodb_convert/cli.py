@@ -100,9 +100,22 @@ def parse_args(argv):
         metavar="MANIFEST",
         help=(
             "Upload deferred blobs from a manifest file (created by "
-            "--deferred-blobs). Requires a destination config for S3 "
-            "credentials. Does not copy transactions."
+            "--deferred-blobs). Requires S3 flags (--s3-bucket etc.) "
+            "or a destination config. Does not copy transactions."
         ),
+    )
+
+    # S3 flags for --upload-blobs (standalone, no storage connection needed)
+    s3_group = parser.add_argument_group(
+        "S3 options (for --upload-blobs)",
+        "Provide S3 credentials directly instead of opening a storage.",
+    )
+    s3_group.add_argument("--s3-bucket", metavar="NAME", help="S3 bucket name")
+    s3_group.add_argument("--s3-endpoint-url", metavar="URL", help="S3 endpoint URL")
+    s3_group.add_argument("--s3-region", metavar="REGION", help="AWS region")
+    s3_group.add_argument("--s3-access-key", metavar="KEY", help="AWS access key ID")
+    s3_group.add_argument(
+        "--s3-secret-key", metavar="SECRET", help="AWS secret access key"
     )
     behavior_group.add_argument(
         "-v",
@@ -151,6 +164,33 @@ def _setup_logging(verbose):
     logging.getLogger("zodb-convert").setLevel(level)
 
 
+def _get_s3_client(args):  # pragma: no cover
+    """Get an S3Client from CLI flags or by opening the destination storage.
+
+    Prefers standalone S3 flags (--s3-bucket etc.) to avoid opening storage
+    connections. Falls back to extracting s3_client from the destination
+    storage if S3 flags are not provided.
+    """
+    if args.s3_bucket:
+        from zodb_s3blobs.s3client import S3Client
+
+        return S3Client(
+            bucket_name=args.s3_bucket,
+            endpoint_url=args.s3_endpoint_url,
+            region_name=args.s3_region,
+            aws_access_key_id=args.s3_access_key,
+            aws_secret_access_key=args.s3_secret_key,
+        )
+
+    # Fallback: open destination storage and extract its S3 client
+    destination, closables = _open_destination(args)
+    # Register closables on args so the caller's finally block can clean up
+    if not hasattr(args, "_closables"):
+        args._closables = []
+    args._closables.extend(closables)
+    return getattr(destination, "_s3_client", None)
+
+
 def _open_destination(args):  # pragma: no cover
     """Open only the destination storage from CLI args.
 
@@ -195,12 +235,13 @@ def main(argv=None):
     if args.upload_blobs:  # pragma: no cover
         from zodb_convert.manifest import upload_from_manifest
 
-        closables = []
         try:
-            destination, closables = _open_destination(args)
-            s3_client = getattr(destination, "_s3_client", None)
+            s3_client = _get_s3_client(args)
             if s3_client is None:
-                log.error("Destination storage has no S3 client configured")
+                log.error(
+                    "No S3 configuration. Provide --s3-bucket + credentials, "
+                    "or a destination config with S3 support."
+                )
                 return 1
             stats = upload_from_manifest(
                 args.upload_blobs,
@@ -221,7 +262,7 @@ def main(argv=None):
             log.error("Upload failed: %s", e, exc_info=True)
             sys.exit(2)
         finally:
-            for obj in closables:
+            for obj in getattr(args, "_closables", []):
                 with contextlib.suppress(Exception):
                     obj.close()
 
