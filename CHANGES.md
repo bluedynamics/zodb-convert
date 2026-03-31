@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.0b12
+
+- Fix `--upload-blobs` hanging with no progress output (#7). Add progress
+  logging every 100 completions. Use interruptible sleep in retry loops so
+  Ctrl+C shuts down workers immediately instead of blocking for seconds per
+  thread. Workers skip retries during shutdown.
+
 ## 1.0.0b11
 
 - `--upload-blobs` no longer opens source or destination storage connections (#5).
