@@ -1,5 +1,7 @@
 # zodb-convert
 
+<img src="https://raw.githubusercontent.com/bluedynamics/zodb-convert/main/elephant-with-pipes-web.png" alt="zodb-convert logo" width="200" align="right" />
+
 Generic ZODB storage conversion tool. Copies data between any two ZODB-compatible storages.
 
 Derived from [RelStorage's zodbconvert](https://github.com/zodb/relstorage) by the
