@@ -2,6 +2,11 @@
 
 ## 1.0.0b13 (unreleased)
 
+- Enable ruff's cyclomatic-complexity check (`C901`, mccabe) with
+  `max-complexity = 15`. Two existing hotspots are marked with targeted
+  `# noqa: C901` as visible refactor candidates (`copy_transactions` 25,
+  `upload_from_manifest` 18); the argparse CLI entry point is exempted via
+  per-file-ignores.
 - Bump `hynek/build-and-inspect-python-package` from v2 to v3.0.1. Hatchling now
   emits `Metadata-Version: 2.5`, which the Twine bundled in v2 rejects with
   `InvalidDistribution: '2.5' is not a valid metadata version` — the release

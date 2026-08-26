@@ -16,7 +16,7 @@ _DEFAULT_MAX_RETRIES = 3
 _DEFAULT_RETRY_BASE_DELAY = 2.0
 
 
-def upload_from_manifest(
+def upload_from_manifest(  # noqa: C901
     manifest_path,
     s3_client,
     workers=8,
