@@ -2,6 +2,9 @@
 
 ## 1.0.0b13 (unreleased)
 
+- Lower ruff's C901 max-complexity threshold from 15 to 13 as part of the
+  ecosystem-wide complexity ratchet. The code base passes as-is after the
+  `copy_transactions`/`upload_from_manifest` refactor (#10).
 - Refactor `copy_transactions` (complexity 25 → 12) and `upload_from_manifest`
   (18 → 4) below the C901 threshold and drop their `# noqa: C901` markers (#10).
   Record copying, blob loading, dry-run counting, and manifest parsing/upload
