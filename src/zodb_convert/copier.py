@@ -119,7 +119,97 @@ def _try_parallel_delegation(
     return None, None, None
 
 
-def copy_transactions(  # noqa: C901
+def _load_blob_filename(source, record, caps):
+    """Return the source blob file for *record*, or None if there is none.
+
+    is_blob_record() is a fast pre-filter (cheap byte scan) to avoid
+    expensive loadBlob() stat calls on non-blob records.  The blob count
+    is based on loadBlob() success, not the filter.
+    """
+    data = record.data
+    if not (
+        data
+        and caps["source_has_blobs"]
+        and caps["dest_has_blobs"]
+        and is_blob_record(data)
+    ):
+        return None
+    try:
+        return source.loadBlob(record.oid, record.tid)
+    except (KeyError, OSError):
+        return None  # No blob file data stored for this oid/tid
+    except Exception:
+        log.warning(
+            "Failed to load blob for oid=%s tid=%s, copying record only",
+            record.oid,
+            record.tid,
+        )
+        return None
+
+
+def _copy_record(
+    record, tid, txn_info, source, destination, caps, preindex, temp_blobs
+):
+    """Copy one data record within the currently open destination transaction.
+
+    Returns (byte_size, is_blob).
+    """
+    oid = record.oid
+    data = record.data
+    byte_size = len(data) if data else 0
+
+    blob_filename = _load_blob_filename(source, record, caps)
+    if blob_filename is None:
+        if caps["dest_has_restore"]:
+            destination.restore(oid, record.tid, data, "", record.data_txn, txn_info)
+        else:
+            destination.store(oid, preindex.get(oid), data, "", txn_info)
+            preindex[oid] = tid
+        return byte_size, False
+
+    # Copy blob to temp file in destination's temp dir
+    fd, tmp_path = tempfile.mkstemp(
+        prefix="zodbconvert_", suffix=".tmp", dir=destination.temporaryDirectory()
+    )
+    os.close(fd)
+    shutil.copy2(blob_filename, tmp_path)
+    temp_blobs.append(tmp_path)
+    byte_size += os.path.getsize(blob_filename)
+
+    if caps["dest_has_blob_restore"]:
+        destination.restoreBlob(
+            oid, record.tid, data, tmp_path, record.data_txn, txn_info
+        )
+    else:
+        destination.storeBlob(oid, preindex.get(oid), data, tmp_path, "", txn_info)
+        preindex[oid] = tid
+    return byte_size, True
+
+
+def _count_dry_run(txn_info, progress):
+    """Count one transaction's records without writing.  Returns the count."""
+    oids = [record.oid for record in txn_info]
+    if progress:
+        progress.on_transaction(txn_info.tid, len(oids), 0, 0, oids=oids)
+    return len(oids)
+
+
+def _rebase_preindex(preindex, tid, committed_tid):
+    """After a store() fallback commit, map this txn's oids to the committed TID."""
+    for oid in list(preindex):
+        if preindex[oid] == tid:
+            preindex[oid] = committed_tid
+
+
+def _cleanup_temp_blobs(temp_blobs):
+    """Delete temp blob files, ignoring already-gone ones, and clear the list."""
+    for tmp in temp_blobs:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp)
+    temp_blobs.clear()
+
+
+def copy_transactions(
     source,
     destination,
     start_tid=None,
@@ -155,9 +245,6 @@ def copy_transactions(  # noqa: C901
         raise ValueError("Source storage does not support IStorageIteration")
 
     restoring = caps["dest_has_restore"]
-    blob_restoring = caps["dest_has_blob_restore"]
-    source_has_blobs = caps["source_has_blobs"]
-    dest_has_blobs = caps["dest_has_blobs"]
 
     # For store() fallback: track previous serial per oid
     preindex = {}
@@ -176,15 +263,8 @@ def copy_transactions(  # noqa: C901
             tid = txn_info.tid
 
             if dry_run:
-                rec_count = 0
-                dry_oids = []
-                for record in txn_info:
-                    rec_count += 1
-                    dry_oids.append(record.oid)
-                obj_count += rec_count
+                obj_count += _count_dry_run(txn_info, progress)
                 txn_count += 1
-                if progress:
-                    progress.on_transaction(tid, rec_count, 0, 0, oids=dry_oids)
                 continue
 
             # Begin transaction on destination with original TID
@@ -196,69 +276,23 @@ def copy_transactions(  # noqa: C901
 
             txn_byte_size = 0
             txn_blobs = 0
-            txn_records = 0
             txn_oids = []
 
             for record in txn_info:
-                oid = record.oid
-                txn_oids.append(oid)
-                data = record.data
-
-                # Check for actual blob file data for this oid/tid.
-                # is_blob_record() is a fast pre-filter (cheap byte scan)
-                # to avoid expensive loadBlob() stat calls on non-blob records.
-                # The blob count is based on loadBlob() success, not the filter.
-                blob_filename = None
-                if (
-                    data
-                    and source_has_blobs
-                    and dest_has_blobs
-                    and is_blob_record(data)
-                ):
-                    try:
-                        blob_filename = source.loadBlob(oid, record.tid)
-                    except (KeyError, OSError):
-                        pass  # No blob file data stored for this oid/tid
-                    except Exception:
-                        log.warning(
-                            "Failed to load blob for oid=%s tid=%s, copying record only",
-                            oid,
-                            record.tid,
-                        )
-
-                if blob_filename is not None:
-                    # Copy blob to temp file in destination's temp dir
-                    tmp_dir = destination.temporaryDirectory()
-                    fd, tmp_path = tempfile.mkstemp(
-                        prefix="zodbconvert_", suffix=".tmp", dir=tmp_dir
-                    )
-                    os.close(fd)
-                    shutil.copy2(blob_filename, tmp_path)
-                    temp_blobs.append(tmp_path)
-                    txn_byte_size += os.path.getsize(blob_filename)
-
-                    if blob_restoring:
-                        destination.restoreBlob(
-                            oid, record.tid, data, tmp_path, record.data_txn, txn_info
-                        )
-                    else:
-                        pre = preindex.get(oid)
-                        destination.storeBlob(oid, pre, data, tmp_path, "", txn_info)
-                        preindex[oid] = tid
-                    txn_blobs += 1
-                elif restoring:
-                    destination.restore(
-                        oid, record.tid, data, "", record.data_txn, txn_info
-                    )
-                else:
-                    pre = preindex.get(oid)
-                    destination.store(oid, pre, data, "", txn_info)
-                    preindex[oid] = tid
-
-                if data:
-                    txn_byte_size += len(data)
+                txn_oids.append(record.oid)
+                byte_size, is_blob = _copy_record(
+                    record,
+                    tid,
+                    txn_info,
+                    source,
+                    destination,
+                    caps,
+                    preindex,
+                    temp_blobs,
+                )
+                txn_byte_size += byte_size
+                txn_blobs += int(is_blob)
                 obj_count += 1
-                txn_records += 1
 
             destination.tpc_vote(txn_info)
             committed_tid = destination.tpc_finish(txn_info)
@@ -268,19 +302,13 @@ def copy_transactions(  # noqa: C901
 
             # For store() fallback: update preindex with actual committed TID
             if not restoring and committed_tid:
-                for oid in list(preindex):
-                    if preindex[oid] == tid:
-                        preindex[oid] = committed_tid
+                _rebase_preindex(preindex, tid, committed_tid)
 
-            # Clean up temp blob files
-            for tmp in temp_blobs:
-                with contextlib.suppress(OSError):
-                    os.unlink(tmp)
-            temp_blobs.clear()
+            _cleanup_temp_blobs(temp_blobs)
 
             if progress:
                 progress.on_transaction(
-                    tid, txn_records, txn_byte_size, txn_blobs, oids=txn_oids
+                    tid, len(txn_oids), txn_byte_size, txn_blobs, oids=txn_oids
                 )
 
     finally:
@@ -290,9 +318,6 @@ def copy_transactions(  # noqa: C901
                 destination.tpc_abort(txn_info)
         if hasattr(fiter, "close"):
             fiter.close()
-        # Clean any remaining temp blobs
-        for tmp in temp_blobs:
-            with contextlib.suppress(OSError):
-                os.unlink(tmp)
+        _cleanup_temp_blobs(temp_blobs)
 
     return txn_count, obj_count, blob_count

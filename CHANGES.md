@@ -2,6 +2,10 @@
 
 ## 1.0.0b13 (unreleased)
 
+- Refactor `copy_transactions` (complexity 25 → 12) and `upload_from_manifest`
+  (18 → 4) below the C901 threshold and drop their `# noqa: C901` markers (#10).
+  Record copying, blob loading, dry-run counting, and manifest parsing/upload
+  are now small dedicated helpers; behavior is unchanged.
 - Enable ruff's cyclomatic-complexity check (`C901`, mccabe) with
   `max-complexity = 15`. Two existing hotspots are marked with targeted
   `# noqa: C901` as visible refactor candidates (`copy_transactions` 25,
