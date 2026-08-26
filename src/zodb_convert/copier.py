@@ -119,7 +119,7 @@ def _try_parallel_delegation(
     return None, None, None
 
 
-def copy_transactions(
+def copy_transactions(  # noqa: C901
     source,
     destination,
     start_tid=None,
