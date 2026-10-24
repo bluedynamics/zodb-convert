@@ -2,6 +2,8 @@
 
 ## 1.0.0b13 (unreleased)
 
+- Declare and test Python 3.15 support: trove classifier and CI test matrix.
+  The test suite passes on 3.15.0 without code changes.
 - Lower ruff's C901 max-complexity threshold from 15 to 13 as part of the
   ecosystem-wide complexity ratchet. The code base passes as-is after the
   `copy_transactions`/`upload_from_manifest` refactor (#10).
